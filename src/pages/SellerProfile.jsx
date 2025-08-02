@@ -10,6 +10,9 @@ import {
 import { Loader } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
+// Assuming axios is installed: npm install axios
+import axios from 'axios';
+
 // Helper for Input Fields (No changes needed here)
 const InputField = ({ label, name, value, type = 'text', readOnly = false, icon: Icon, options, onChange, error }) => (
   <div className="mb-2">
@@ -59,9 +62,29 @@ const InputField = ({ label, name, value, type = 'text', readOnly = false, icon:
 );
 
 // Helper for File Upload Fields - MODIFIED TO USE BLOB URLS FOR DISPLAY
-const FileInputField = ({ label, name, value, onChange, readOnly = false, icon: Icon, error, allowedTypes, fileTypeLabel, displayUrl }) => {
-  const fileName = value ? (value.startsWith('data:') ? 'Selected File' : 'Existing File') : 'No file chosen';
-  const displayIcon = value && value.startsWith('data:image') ? <FaRegFileImage className="mr-2 text-lime-600" /> : <FaRegFilePdf className="mr-2 text-lime-600" />;
+const FileInputField = ({ label, name, value, onChange, readOnly = false, icon: Icon, error, allowedTypes, fileTypeLabel, displayUrl, MAX_FILE_SIZE_MB }) => {
+  // Determine if a file is currently "selected" (either new upload or existing from backend)
+  const isFilePresent = !!value; // Value would be a Base64 string (data: prefix or not) or null
+
+  // Determine the display name
+  let fileName = 'No file chosen';
+  if (isFilePresent) {
+    if (typeof value === 'string' && value.startsWith('data:')) {
+      fileName = 'Selected File'; // New file or existing with correct prefix
+    } else {
+      fileName = 'Existing File'; // Existing file from backend without data: prefix
+    }
+  }
+
+  // Determine the icon based on detected MIME type from value or general file type if not specified
+  let displayIcon = <FaRegFilePdf className="mr-2 text-lime-600" />; // Default to PDF icon
+  if (value && typeof value === 'string' && value.startsWith('data:image')) {
+    displayIcon = <FaRegFileImage className="mr-2 text-lime-600" />;
+  } else if (name === 'userPhoto' || name === 'shopPhoto') {
+    // If it's a photo field but value doesn't start with data:image, still show image icon
+    displayIcon = <FaRegFileImage className="mr-2 text-lime-600" />;
+  }
+
   const acceptAttr = allowedTypes.join(',');
 
   return (
@@ -99,12 +122,13 @@ const FileInputField = ({ label, name, value, onChange, readOnly = false, icon: 
             target="_blank"
             rel="noopener noreferrer"
             className="ml-2 text-lime-600 hover:text-lime-800 transition-colors"
+            title="View Document"
           >
             View
           </a>
         )}
         {/* Optional: Add a clear button for files in edit mode */}
-        {!readOnly && value && (
+        {!readOnly && isFilePresent && ( // Only show clear button if a file is present and not read-only
           <button
             type="button"
             onClick={() => onChange({ target: { name, files: [] } })} // Simulate empty file list to clear
@@ -152,26 +176,34 @@ const SellerProfile = () => {
 
   const validateField = useCallback((name, value) => {
     let errorMsg = '';
+    // Use `editedData` for conditional validation, ensuring it's not null
+    const currentEditedData = editedData || sellerData;
+
     switch (name) {
       case 'email':
-        if (!/\S+@\S+\.\S+/.test(value)) {
-          errorMsg = 'Invalid email format.';
+        if (!value || !/\S+@\S+\.\S+/.test(value)) { // Changed to !value for required check
+          errorMsg = 'Invalid email format and is required.';
         }
         break;
       case 'mobile':
+        if (!value || !/^\d{10}$/.test(value)) { // Changed to !value for required check
+          errorMsg = 'Mobile number must be 10 digits and is required.';
+        }
+        break;
       case 'alternateMobile':
-        if (value && !/^\d{10}$/.test(value)) {
-          errorMsg = 'Mobile number must be 10 digits.';
+        if (value && !/^\d{10}$/.test(value)) { // Optional, but if provided, must be 10 digits
+          errorMsg = 'Alternate mobile number must be 10 digits.';
         }
         break;
       case 'address.pincode':
-        if (value && !/^\d{6}$/.test(value)) {
-          errorMsg = 'Pincode must be 6 digits.';
+        if (!value || !/^\d{6}$/.test(value)) { // Changed to !value for required check
+          errorMsg = 'Pincode must be 6 digits and is required.';
         }
         break;
       case 'numberOfFarmers':
-        if (editedData?.businessType === 'FPO' && (value === '' || parseInt(value) <= 0 || isNaN(parseInt(value)))) {
-          errorMsg = 'Number of farmers must be a positive number.';
+        // Check if currentEditedData exists before accessing businessType
+        if (currentEditedData?.businessType === 'FPO' && (value === '' || parseInt(value) <= 0 || isNaN(parseInt(value)))) {
+          errorMsg = 'Number of farmers must be a positive number for FPO.';
         }
         break;
       case 'companyName':
@@ -179,8 +211,13 @@ const SellerProfile = () => {
       case 'address.street':
       case 'address.city':
       case 'address.state':
-        if (value.trim() === '') {
+        if (!value || value.trim() === '') { // Use !value for general required check
           errorMsg = 'This field is required.';
+        }
+        break;
+      case 'businessType':
+        if (!value) {
+          errorMsg = 'Business type is required.';
         }
         break;
       default:
@@ -188,26 +225,33 @@ const SellerProfile = () => {
     }
     setValidationErrors(prev => ({ ...prev, [name]: errorMsg }));
     return errorMsg === '';
-  }, [editedData]);
+  }, [editedData, sellerData]); // Added sellerData to dependencies for initial validation context
 
 
   const handleChange = useCallback((e) => {
     const { name, value } = e.target;
-    if (name.includes('address.')) {
-      const addressField = name.split('.')[1];
-      setEditedData(prev => ({
-        ...prev,
-        address: {
-          ...prev.address,
-          [addressField]: value,
-        },
-      }));
-    } else {
-      setEditedData(prev => ({
-        ...prev,
-        [name]: value,
-      }));
+    // Special handling for number inputs to ensure they are numeric or empty string
+    if (name === 'numberOfFarmers' && value !== '' && !/^\d*$/.test(value)) {
+      return; // Prevent non-numeric input for number fields
     }
+
+    setEditedData(prev => {
+      if (name.includes('address.')) {
+        const addressField = name.split('.')[1];
+        return {
+          ...prev,
+          address: {
+            ...prev.address,
+            [addressField]: value,
+          },
+        };
+      } else {
+        return {
+          ...prev,
+          [name]: value,
+        };
+      }
+    });
     // Validate immediately on change
     validateField(name, value);
   }, [validateField]);
@@ -218,11 +262,11 @@ const SellerProfile = () => {
     const file = e.target.files[0];
     const { name } = e.target;
 
-    // Handle clearing the file input
+    // Handle clearing the file input (e.g., if button is clicked or no file selected)
     if (!file) {
       setEditedData(prev => ({ ...prev, [name]: null }));
       setValidationErrors(prev => ({ ...prev, [name]: '' }));
-      // Also clear the Blob URL if it exists
+      // Also clear and revoke the Blob URL if it exists
       setDocUrls(prev => {
         const newUrls = { ...prev };
         if (newUrls[name]) URL.revokeObjectURL(newUrls[name]);
@@ -234,26 +278,41 @@ const SellerProfile = () => {
 
     // File type validation (front-end check)
     let allowedMimeTypes = [];
+    let fileTypeLabelText = '';
+
+    // Define labelMapping locally or pass as prop if needed within this scope
+    const labelMapping = {
+      userPhoto: 'Contact Person Photo',
+      shopPhoto: 'Shop/Farm Photo',
+      companyRegistrationDoc: 'Company Registration Document (PDF)',
+      gstCertificate: 'GST Certificate (PDF)',
+      bankDetailsDoc: 'Bank Details Document (PDF)',
+      idProofDoc: 'ID Proof Document (PDF)',
+    };
+
+
     if (name === 'userPhoto' || name === 'shopPhoto') {
       allowedMimeTypes = ['image/jpeg', 'image/png', 'image/gif'];
-      if (!file.type.startsWith('image/')) {
-        showToastMessage('Only image files are allowed for photos.', 'error');
-        setValidationErrors(prev => ({ ...prev, [name]: 'Only image files are allowed.' }));
-        return;
-      }
+      fileTypeLabelText = 'JPG, PNG, GIF';
     } else { // All other document fields should be PDF
       allowedMimeTypes = ['application/pdf'];
-      if (file.type !== 'application/pdf') {
-        showToastMessage('Only PDF files are allowed for documents.', 'error');
-        setValidationErrors(prev => ({ ...prev, [name]: 'Only PDF files are allowed.' }));
-        return;
-      }
+      fileTypeLabelText = 'PDF';
+    }
+
+    if (!allowedMimeTypes.includes(file.type)) {
+      showToastMessage(`Only ${fileTypeLabelText} files are allowed for ${labelMapping[name] || name}.`, 'error');
+      setValidationErrors(prev => ({ ...prev, [name]: `Only ${fileTypeLabelText} files are allowed.` }));
+      // Clear the input visually as well
+      e.target.value = '';
+      return;
     }
 
     // File size validation
     if (file.size > MAX_FILE_SIZE_BYTES) {
-      showToastMessage(`File size exceeds ${MAX_FILE_SIZE_MB}MB limit.`, 'error');
+      showToastMessage(`File size for ${labelMapping[name] || name} exceeds ${MAX_FILE_SIZE_MB}MB limit.`, 'error');
       setValidationErrors(prev => ({ ...prev, [name]: `File size exceeds ${MAX_FILE_SIZE_MB}MB limit.` }));
+      // Clear the input visually as well
+      e.target.value = '';
       return;
     }
 
@@ -261,7 +320,8 @@ const SellerProfile = () => {
     reader.readAsDataURL(file); // Reads the file as a data URL (Base64 string with prefix)
 
     reader.onloadend = () => {
-      // Store the full Base64 string directly for sending to backend
+      // Store the full Base64 string (e.g., "data:image/jpeg;base64,....")
+      // This is what will be sent to the backend.
       setEditedData(prev => ({
         ...prev,
         [name]: reader.result,
@@ -274,24 +334,38 @@ const SellerProfile = () => {
         if (parts) {
           const mimeType = parts[1];
           const base64Content = parts[2];
-          const byteCharacters = atob(base64Content);
-          const byteNumbers = new Array(byteCharacters.length);
-          for (let i = 0; i < byteCharacters.length; i++) {
-            byteNumbers[i] = byteCharacters.charCodeAt(i);
-          }
-          const byteArray = new Uint8Array(byteNumbers);
-          const blob = new Blob([byteArray], { type: mimeType });
-          const url = URL.createObjectURL(blob);
+          // Ensure base64Content is valid before decoding
+          if (base64Content) {
+            const byteCharacters = atob(base64Content);
+            const byteNumbers = new Array(byteCharacters.length);
+            for (let i = 0; i < byteCharacters.length; i++) {
+              byteNumbers[i] = byteCharacters.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            const blob = new Blob([byteArray], { type: mimeType });
+            const url = URL.createObjectURL(blob);
 
-          // Revoke old URL if it exists for this field to prevent memory leaks
-          setDocUrls(prev => {
-            if (prev[name]) URL.revokeObjectURL(prev[name]);
-            return { ...prev, [name]: url };
-          });
+            // Revoke old URL if it exists for this field to prevent memory leaks
+            setDocUrls(prev => {
+              if (prev[name]) URL.revokeObjectURL(prev[name]);
+              return { ...prev, [name]: url };
+            });
+          } else {
+             throw new Error("Base64 content is empty or invalid.");
+          }
+        } else {
+          throw new Error("Data URL format mismatch.");
         }
       } catch (e) {
-        console.error("Error creating Blob URL:", e);
-        showToastMessage('Failed to display file. Please re-upload.', 'error');
+        console.error(`Error creating Blob URL for ${name}:`, e);
+        showToastMessage('Failed to display file preview. Please re-upload.', 'error');
+        // Clear the generated Blob URL if preview fails
+        setDocUrls(prev => {
+          if (prev[name]) URL.revokeObjectURL(prev[name]);
+          const newUrls = { ...prev };
+          delete newUrls[name];
+          return newUrls;
+        });
       }
     };
 
@@ -301,7 +375,63 @@ const SellerProfile = () => {
       console.error("File reading error:", error);
     };
 
-  }, [showToastMessage, MAX_FILE_SIZE_BYTES]);
+  }, [showToastMessage, MAX_FILE_SIZE_BYTES, MAX_FILE_SIZE_MB]); // Added MAX_FILE_SIZE_MB to deps
+
+
+  // Helper to process Base64 string from backend to a Blob URL
+  const processBase64ToBlobUrl = useCallback((base64String, fieldName) => {
+    if (base64String && typeof base64String === 'string') {
+      let mimeType;
+      let base64Content;
+
+      // Check if it's already a data URI
+      const parts = base64String.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.*)$/);
+
+      if (parts) {
+        mimeType = parts[1];
+        base64Content = parts[2];
+      } else {
+        // This means the backend sent raw Base64 without 'data:' prefix.
+        console.warn(`Unexpected Base64 format for ${fieldName} from backend (no data: prefix). Attempting to guess MIME type.`);
+        base64Content = base64String;
+
+        // Attempt to guess MIME type based on fieldName (similar to backend's forgiving logic)
+        // This is necessary because raw Base64 strings don't contain MIME type information.
+        if (fieldName.includes('Photo')) {
+          // For images, we can attempt to sniff popular types
+          const hexSignature = base64Content.substring(0, 8).toUpperCase(); // Get first few bytes for sniffing
+          if (hexSignature.startsWith('89504E47')) mimeType = 'image/png'; // PNG
+          else if (hexSignature.startsWith('FFD8FF')) mimeType = 'image/jpeg'; // JPEG
+          else if (hexSignature.startsWith('47494638')) mimeType = 'image/gif'; // GIF
+          else mimeType = 'image/jpeg'; // Fallback for unknown image types
+        } else if (fieldName.includes('Doc') || fieldName.includes('Certificate')) {
+          // For documents, default to PDF unless other types are expected
+          const hexSignature = base64Content.substring(0, 8).toUpperCase();
+          if (hexSignature.startsWith('25504446')) mimeType = 'application/pdf'; // PDF
+          else mimeType = 'application/pdf'; // Fallback for unknown document types
+        } else {
+          console.error(`Cannot guess MIME type for raw Base64 string for ${fieldName}.`);
+          return null; // Cannot create Blob if MIME type is unknown
+        }
+      }
+
+      try {
+        if (base64Content) {
+          const byteCharacters = atob(base64Content);
+          const byteNumbers = new Array(byteCharacters.length);
+          for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+          }
+          const byteArray = new Uint8Array(byteNumbers);
+          const blob = new Blob([byteArray], { type: mimeType });
+          return URL.createObjectURL(blob);
+        }
+      } catch (e) {
+        console.error(`Error creating Blob URL for ${fieldName} with inferred MIME type ${mimeType}:`, e);
+      }
+    }
+    return null; // Return null if invalid or not present
+  }, []);
 
 
   const fetchSellerProfile = useCallback(async () => {
@@ -317,19 +447,18 @@ const SellerProfile = () => {
     }
 
     try {
-      const response = await fetch('http://localhost:5000/api/sellerprofile', {
-        method: 'GET',
+      const response = await axios.get('http://localhost:5000/api/sellerprofile', {
         headers: {
           'Content-Type': 'application/json',
           'x-auth-token': authToken,
         },
       });
 
-      const data = await response.json();
+      const data = response.data; // Axios automatically parses JSON
 
-      if (!response.ok) {
-        console.error('Backend response not OK:', data);
-        throw new Error(data.message || 'Failed to fetch seller profile data.');
+      // ⭐ CRITICAL FIX: Ensure fetched data is a valid object before setting state
+      if (!data || typeof data !== 'object') {
+        throw new Error('Invalid data structure received from backend.');
       }
 
       const fetchedData = {
@@ -343,6 +472,7 @@ const SellerProfile = () => {
         numberOfFarmers: data.numberOfFarmers || '',
         businessDescription: data.businessDescription || '',
         sellerStatus: data.sellerStatus || 'new',
+        // Files are stored as Base64 strings directly from backend response
         userPhoto: data.userPhoto || null,
         shopPhoto: data.shopPhoto || null,
         companyRegistrationDoc: data.companyRegistrationDoc || null,
@@ -356,58 +486,32 @@ const SellerProfile = () => {
           pincode: data.address?.pincode || '',
         },
       };
+
       setSellerData(fetchedData);
-      setEditedData(fetchedData);
+      setEditedData(fetchedData); // Initialize editedData with fetched data
 
       // Process Base64 strings from backend to create Blob URLs for display
       const newDocUrls = {};
       const fileFields = ['userPhoto', 'shopPhoto', 'companyRegistrationDoc', 'gstCertificate', 'bankDetailsDoc', 'idProofDoc'];
 
       fileFields.forEach(field => {
-        const base64Data = data[field];
-        if (base64Data && typeof base64Data === 'string' && base64Data.startsWith('data:')) {
-          try {
-            const parts = base64Data.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.*)$/);
-            if (parts) {
-              const mimeType = parts[1];
-              const base64Content = parts[2];
-              const byteCharacters = atob(base64Content);
-              const byteNumbers = new Array(byteCharacters.length);
-              for (let i = 0; i < byteCharacters.length; i++) {
-                byteNumbers[i] = byteCharacters.charCodeAt(i);
-              }
-              const byteArray = new Uint8Array(byteNumbers);
-              const blob = new Blob([byteArray], { type: mimeType });
-              newDocUrls[field] = URL.createObjectURL(blob);
-            }
-          } catch (e) {
-            console.error(`Error creating Blob URL for ${field}:`, e);
-            newDocUrls[field] = null; // Mark as null if creation fails
-          }
-        } else if (base64Data === null) {
-          newDocUrls[field] = null; // Explicitly null if backend sent null
-        } else {
-           // Handle cases where backend sends a non-data: base64 string (e.g., just the raw base64)
-           // This assumes your backend has been corrected to always send data:MIME;base64,...
-           // If not, you'd need to guess MIME or store it in DB. For now, assume it's data: prefixed.
-           console.warn(`Unexpected Base64 format for ${field} from backend (no data: prefix).`);
-           newDocUrls[field] = null;
-        }
+        newDocUrls[field] = processBase64ToBlobUrl(fetchedData[field], field);
       });
       setDocUrls(newDocUrls);
 
     } catch (err) {
-      showToastMessage(err.message || 'Error fetching profile. Please try again.', 'error');
+      const errorMessage = err.response?.data?.message || err.message || 'Error fetching profile. Please try again.';
+      showToastMessage(errorMessage, 'error');
       console.error("Fetch seller profile error:", err);
-      if (err.message.includes('token') || err.message.includes('Authentication') || err.message.includes('Access denied')) {
+      if (err.response?.status === 401 || errorMessage.includes('token') || errorMessage.includes('Authentication') || errorMessage.includes('Access denied')) {
         localStorage.removeItem('sellerAuthToken');
-        localStorage.removeItem('sellerData');
+        localStorage.removeItem('sellerData'); // Clear potentially bad sellerData from localStorage
         setTimeout(() => navigate('/seller-login'), 3000);
       }
     } finally {
       setLoading(false);
     }
-  }, [navigate, showToastMessage]);
+  }, [navigate, showToastMessage, processBase64ToBlobUrl]);
 
   useEffect(() => {
     fetchSellerProfile();
@@ -417,7 +521,12 @@ const SellerProfile = () => {
         if (url) URL.revokeObjectURL(url);
       });
     };
-  }, [fetchSellerProfile, docUrls]); // Added docUrls to dependency array for cleanup
+    // The dependency array should contain items that, if changed, should re-run the effect.
+    // docUrls is managed *inside* this effect's lifecycle and cleanup, so including it here
+    // might lead to infinite loops or unnecessary re-runs if it changes frequently.
+    // `fetchSellerProfile` is a useCallback, so it's stable as long as its own dependencies don't change.
+  }, [fetchSellerProfile]);
+
 
   const toggleEditMode = () => {
     if (editMode) {
@@ -425,35 +534,26 @@ const SellerProfile = () => {
       setEditedData(sellerData);
       setValidationErrors({});
       setError('');
-      // Re-create Blob URLs from original sellerData in case they were revoked/changed during edit
+      // Revoke all existing Blob URLs and re-create from original sellerData
+      Object.values(docUrls).forEach(url => {
+        if (url) URL.revokeObjectURL(url);
+      });
       const newDocUrls = {};
       const fileFields = ['userPhoto', 'shopPhoto', 'companyRegistrationDoc', 'gstCertificate', 'bankDetailsDoc', 'idProofDoc'];
       fileFields.forEach(field => {
-        const base64Data = sellerData[field]; // Use original sellerData
-        if (base64Data && typeof base64Data === 'string' && base64Data.startsWith('data:')) {
-          try {
-            const parts = base64Data.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.*)$/);
-            if (parts) {
-              const mimeType = parts[1];
-              const base64Content = parts[2];
-              const byteCharacters = atob(base64Content);
-              const byteNumbers = new Array(byteCharacters.length);
-              for (let i = 0; i < byteCharacters.length; i++) {
-                byteNumbers[i] = byteCharacters.charCodeAt(i);
-              }
-              const byteArray = new Uint8Array(byteNumbers);
-              const blob = new Blob([byteArray], { type: mimeType });
-              newDocUrls[field] = URL.createObjectURL(blob);
-            }
-          } catch (e) {
-            console.error(`Error recreating Blob URL for ${field} on cancel:`, e);
-            newDocUrls[field] = null;
-          }
-        } else {
-          newDocUrls[field] = null;
-        }
+        newDocUrls[field] = processBase64ToBlobUrl(sellerData[field], field);
       });
       setDocUrls(newDocUrls);
+    } else {
+       // When entering edit mode, ensure a fresh set of docUrls is available for potential changes
+       // This is mostly to ensure we have a clean slate for new uploads, but also
+       // to ensure existing ones are properly setup for display.
+       const freshDocUrls = {};
+       const fileFields = ['userPhoto', 'shopPhoto', 'companyRegistrationDoc', 'gstCertificate', 'bankDetailsDoc', 'idProofDoc'];
+       fileFields.forEach(field => {
+            freshDocUrls[field] = processBase64ToBlobUrl(sellerData[field], field);
+       });
+       setDocUrls(freshDocUrls);
     }
     setEditMode(!editMode);
   };
@@ -473,25 +573,28 @@ const SellerProfile = () => {
 
     // --- Client-Side Validation before sending to backend ---
     let isValid = true;
-    const fieldsToValidate = [
-      'companyName', 'sellerName', 'email', 'mobile',
-      'address.street', 'address.city', 'address.state', 'address.pincode',
-      'businessType', 'alternateMobile', 'numberOfFarmers' // numberOfFarmers is conditionally checked by validateField
-    ];
+    // Map of field names to their corresponding editedData paths for validation
+    const fieldsToValidate = {
+      'companyName': editedData.companyName,
+      'sellerName': editedData.sellerName,
+      'email': editedData.email,
+      'mobile': editedData.mobile,
+      'alternateMobile': editedData.alternateMobile, // Optional but validated if present
+      'address.street': editedData.address?.street,
+      'address.city': editedData.address?.city,
+      'address.state': editedData.address?.state,
+      'address.pincode': editedData.address?.pincode,
+      'businessType': editedData.businessType,
+      'numberOfFarmers': editedData.numberOfFarmers, // Conditionally checked by validateField
+    };
 
-    for (const field of fieldsToValidate) {
-      let value;
-      if (field.startsWith('address.')) {
-        value = editedData.address[field.split('.')[1]];
-      } else {
-        value = editedData[field];
-      }
-      if (!validateField(field, value)) {
+    for (const field in fieldsToValidate) {
+      if (!validateField(field, fieldsToValidate[field])) {
         isValid = false;
       }
     }
 
-    // Check for any existing file validation errors
+    // Also check for any existing file validation errors from handleFileChange
     const documentFields = ['userPhoto', 'shopPhoto', 'companyRegistrationDoc', 'gstCertificate', 'bankDetailsDoc', 'idProofDoc'];
     documentFields.forEach(docField => {
       if (validationErrors[docField]) { // Check if there's an error already set for this file
@@ -507,68 +610,46 @@ const SellerProfile = () => {
     // --- End Client-Side Validation ---
 
     try {
-      const response = await fetch('http://localhost:5000/api/sellerprofile', {
-        method: 'PUT',
+      const response = await axios.put('http://localhost:5000/api/sellerprofile', editedData, {
         headers: {
           'Content-Type': 'application/json',
           'x-auth-token': authToken,
         },
-        // Send all edited data, including Base64 strings for files
-        body: JSON.stringify(editedData),
       });
 
-      const data = await response.json();
+      const data = response.data; // Axios automatically parses JSON
 
-      if (!response.ok) {
-        console.error('Backend response not OK:', data);
-        throw new Error(data.message || 'Failed to update profile.');
+      if (!data || !data.sellerProfile || typeof data.sellerProfile !== 'object') {
+        throw new Error('Invalid response received after saving profile.');
       }
 
       // If save is successful, update original sellerData and disable edit mode
-      setSellerData(editedData);
+      setSellerData(data.sellerProfile); // Use the data returned by the backend (might be updated/sanitized)
+      setEditedData(data.sellerProfile);
       setEditMode(false);
       showToastMessage('Profile saved successfully!', 'success');
-      console.log('Profile saved:', data);
+      console.log('Profile saved:', data.sellerProfile);
 
       // IMPORTANT: Re-process the newly saved Base64 data from the backend
       // to update the Blob URLs for display. This ensures newly uploaded files are viewable.
       const newDocUrls = {};
       const fileFields = ['userPhoto', 'shopPhoto', 'companyRegistrationDoc', 'gstCertificate', 'bankDetailsDoc', 'idProofDoc'];
 
+      // Revoke any existing Blob URLs before creating new ones
+      Object.values(docUrls).forEach(url => {
+        if (url) URL.revokeObjectURL(url);
+      });
+
       fileFields.forEach(field => {
-        const base64Data = data.sellerProfile[field]; // Use data.sellerProfile as it's the latest from backend
-        if (base64Data && typeof base64Data === 'string' && base64Data.startsWith('data:')) {
-          try {
-            const parts = base64Data.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.*)$/);
-            if (parts) {
-              const mimeType = parts[1];
-              const base64Content = parts[2];
-              const byteCharacters = atob(base64Content);
-              const byteNumbers = new Array(byteCharacters.length);
-              for (let i = 0; i < byteCharacters.length; i++) {
-                byteNumbers[i] = byteCharacters.charCodeAt(i);
-              }
-              const byteArray = new Uint8Array(byteNumbers);
-              const blob = new Blob([byteArray], { type: mimeType });
-              newDocUrls[field] = URL.createObjectURL(blob);
-            }
-          } catch (e) {
-            console.error(`Error creating Blob URL for ${field} after save:`, e);
-            newDocUrls[field] = null;
-          }
-        } else if (base64Data === null) {
-          newDocUrls[field] = null;
-        } else {
-           console.warn(`Unexpected Base64 format for ${field} from backend after save.`);
-           newDocUrls[field] = null;
-        }
+        newDocUrls[field] = processBase64ToBlobUrl(data.sellerProfile[field], field);
       });
       setDocUrls(newDocUrls);
 
     } catch (err) {
-      showToastMessage(err.message || 'Error saving profile. Please try again.', 'error');
+      const errorMessage = err.response?.data?.message || err.message || 'Error saving profile. Please try again.';
+      showToastMessage(errorMessage, 'error');
       console.error("Save seller profile error:", err);
-      if (err.message.includes('token') || err.message.includes('Authentication') || err.message.includes('Access denied')) {
+      if (err.response?.status === 401 || errorMessage.includes('token') || errorMessage.includes('Authentication') || errorMessage.includes('Access denied')) {
         localStorage.removeItem('sellerAuthToken');
         localStorage.removeItem('sellerData');
         setTimeout(() => navigate('/seller-login'), 3000);
@@ -589,6 +670,7 @@ const SellerProfile = () => {
     );
   }
 
+  // If sellerData is null after loading, it means there was an unrecoverable error or no data
   if (!sellerData) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-lime-50 to-green-100 flex flex-col items-center justify-center p-3 sm:p-4 font-sans text-red-700">
@@ -607,6 +689,16 @@ const SellerProfile = () => {
     pending: 'bg-yellow-100 text-yellow-800 border-yellow-300',
     approved: 'bg-green-100 text-green-800 border-green-300',
     rejected: 'bg-red-100 text-red-800 border-red-300',
+  };
+
+  // Mapping for FileInputField labels
+  const labelMapping = {
+    userPhoto: 'Contact Person Photo',
+    shopPhoto: 'Shop/Farm Photo',
+    companyRegistrationDoc: 'Company Registration Document (PDF)',
+    gstCertificate: 'GST Certificate (PDF)',
+    bankDetailsDoc: 'Bank Details Document (PDF)',
+    idProofDoc: 'ID Proof Document (PDF)',
   };
 
   return (
@@ -696,167 +788,295 @@ const SellerProfile = () => {
 
         {/* Profile Picture Section */}
         <div className="flex flex-col items-center mb-6">
-          <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-full overflow-hidden border-3 border-white shadow-lg bg-gray-200">
-            <img
-              src={docUrls.userPhoto || defaultProfilePic} 
-              alt="User Profile"
-              className="w-full h-full object-cover"
-              onError={(e) => { e.target.onerror = null; e.target.src = defaultProfilePic; }}
-            />
+          <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-full overflow-hidden border-4 border-lime-300 shadow-md bg-gray-200 flex items-center justify-center">
+            {docUrls.userPhoto && typeof docUrls.userPhoto === 'string' ? (
+              <img
+                src={docUrls.userPhoto}
+                alt="User Profile"
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <FaUserCircle className="text-gray-500 text-6xl sm:text-7xl" />
+            )}
             {editMode && (
-              <label htmlFor="user-photo-upload" className="absolute inset-0 flex items-center justify-center bg-black/40 text-white cursor-pointer opacity-0 hover:opacity-100 transition-opacity duration-200">
-                <FaCamera className="text-xl sm:text-2xl" />
+              <label
+                htmlFor="userPhoto"
+                className="absolute bottom-0 right-0 bg-lime-500 p-2 rounded-full cursor-pointer hover:bg-lime-600 transition-colors shadow-md"
+                title="Change Profile Photo"
+              >
+                <FaCamera className="text-white text-base sm:text-lg" />
                 <input
-                  id="user-photo-upload"
+                  id="userPhoto"
                   type="file"
-                  accept="image/*"
-                  className="hidden"
                   name="userPhoto"
                   onChange={handleFileChange}
+                  className="hidden"
+                  accept="image/jpeg,image/png,image/gif"
                 />
               </label>
             )}
           </div>
-          {editMode && (
-            <label htmlFor="user-photo-upload" className="mt-3 text-lime-600 cursor-pointer hover:underline text-xs sm:text-sm">
-              Change Contact Person Photo
-              <input
-                id="user-photo-upload"
-                type="file"
-                accept="image/*"
-                className="hidden"
-                name="userPhoto"
-                onChange={handleFileChange}
-              />
-            </label>
-          )}
+          <p className="mt-2 text-lg font-semibold text-gray-800">{editedData.sellerName || 'N/A'}</p>
         </div>
 
-        {/* Animated Tabs for Sections */}
-        <div className="mb-4 bg-white/60 backdrop-blur-sm rounded-lg p-0.5 flex border border-white/70 shadow-inner">
-          <motion.button
+        {/* Tabs for Profile Sections */}
+        <div className="flex justify-center border-b border-gray-200 mb-6">
+          <button
+            className={`py-2 px-4 text-sm font-medium ${activeTab === 'personal' ? 'text-lime-600 border-b-2 border-lime-600' : 'text-gray-500 hover:text-gray-700'}`}
             onClick={() => setActiveTab('personal')}
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            className={`flex-1 py-2 text-sm font-semibold rounded-md transition-all duration-300
-                        ${activeTab === 'personal' ? 'bg-lime-500 text-white shadow-md' : 'text-gray-700 hover:bg-white/70'}`}
           >
-            Personal & Contact
-          </motion.button>
-          <motion.button
+            <FaUserCircle className="inline-block mr-1.5" /> Personal Details
+          </button>
+          <button
+            className={`py-2 px-4 text-sm font-medium ${activeTab === 'business' ? 'text-lime-600 border-b-2 border-lime-600' : 'text-gray-500 hover:text-gray-700'}`}
             onClick={() => setActiveTab('business')}
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            className={`flex-1 py-2 text-sm font-semibold rounded-md transition-all duration-300
-                        ${activeTab === 'business' ? 'bg-lime-500 text-white shadow-md' : 'text-gray-700 hover:bg-white/70'}`}
           >
-            Business Details
-          </motion.button>
-          <motion.button
+            <FaBuilding className="inline-block mr-1.5" /> Business Info
+          </button>
+          <button
+            className={`py-2 px-4 text-sm font-medium ${activeTab === 'documents' ? 'text-lime-600 border-b-2 border-lime-600' : 'text-gray-500 hover:text-gray-700'}`}
             onClick={() => setActiveTab('documents')}
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            className={`flex-1 py-2 text-sm font-semibold rounded-md transition-all duration-300
-                        ${activeTab === 'documents' ? 'bg-lime-500 text-white shadow-md' : 'text-gray-700 hover:bg-white/70'}`}
           >
-            Documents
-          </motion.button>
+            <FaFileAlt className="inline-block mr-1.5" /> Documents
+          </button>
         </div>
 
-        {/* Tab Content */}
-        <AnimatePresence mode="wait">
-          {activeTab === 'personal' && (
-            <motion.div
-              key="personal-tab"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3 }}
-              className="p-4 rounded-xl bg-white/60 backdrop-blur-sm border border-white/70 shadow-lg"
-            >
-              <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4 flex items-center">
-                <FaUserCircle className="mr-2 text-lime-600 text-xl" /> Contact Information
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-3 gap-y-2">
-                <InputField label="Contact Person Name" name="sellerName" value={editedData.sellerName} onChange={handleChange} readOnly={!editMode} icon={FaUserCircle} error={validationErrors.sellerName} />
-                <InputField label="Email" name="email" value={editedData.email} type="email" readOnly={true} icon={FaEnvelope} />
-                <InputField label="Mobile Number" name="mobile" value={editedData.mobile} type="tel" readOnly={true} icon={FaPhone} error={validationErrors.mobile} />
-                <InputField label="Alternate Mobile" name="alternateMobile" value={editedData.alternateMobile} onChange={handleChange} type="tel" readOnly={!editMode} icon={FaPhone} error={validationErrors.alternateMobile} />
-              </div>
 
-              <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4 mt-6 flex items-center">
-                <FaMapMarkerAlt className="mr-2 text-lime-600 text-xl" /> Business Address
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-3 gap-y-2">
-                <InputField label="Street Address" name="address.street" value={editedData.address.street} onChange={handleChange} readOnly={!editMode} icon={FaHome} error={validationErrors['address.street']} />
-                <InputField label="City" name="address.city" value={editedData.address.city} onChange={handleChange} readOnly={!editMode} icon={FaBuilding} error={validationErrors['address.city']} />
-                <InputField label="State" name="address.state" value={editedData.address.state} onChange={handleChange} readOnly={!editMode} icon={FaBuilding} error={validationErrors['address.state']} />
-                <InputField label="Pincode" name="address.pincode" value={editedData.address.pincode} onChange={handleChange} readOnly={!editMode} icon={FaMapMarkerAlt} error={validationErrors['address.pincode']} />
-              </div>
-            </motion.div>
-          )}
+        {/* Profile Content */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+          <AnimatePresence mode="wait">
+            {activeTab === 'personal' && (
+              <motion.div
+                key="personal"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                transition={{ duration: 0.2 }}
+                className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4"
+              >
+                <InputField
+                  label="Contact Person Name"
+                  name="sellerName"
+                  value={editedData.sellerName}
+                  onChange={handleChange}
+                  readOnly={!editMode}
+                  icon={FaUserCircle}
+                  error={validationErrors.sellerName}
+                />
+                <InputField
+                  label="Company Name"
+                  name="companyName"
+                  value={editedData.companyName}
+                  onChange={handleChange}
+                  readOnly={!editMode}
+                  icon={FaRegBuilding}
+                  error={validationErrors.companyName}
+                />
+                <InputField
+                  label="Email"
+                  name="email"
+                  value={editedData.email}
+                  onChange={handleChange}
+                  readOnly={!editMode}
+                  icon={FaEnvelope}
+                  type="email"
+                  error={validationErrors.email}
+                />
+                <InputField
+                  label="Mobile Number"
+                  name="mobile"
+                  value={editedData.mobile}
+                  onChange={handleChange}
+                  readOnly={!editMode}
+                  icon={FaPhone}
+                  type="tel"
+                  error={validationErrors.mobile}
+                />
+                <InputField
+                  label="Alternate Mobile (Optional)"
+                  name="alternateMobile"
+                  value={editedData.alternateMobile}
+                  onChange={handleChange}
+                  readOnly={!editMode}
+                  icon={FaPhone}
+                  type="tel"
+                  error={validationErrors.alternateMobile}
+                />
+                <InputField
+                  label="Date of Establishment"
+                  name="dateOfEstablishment"
+                  value={editedData.dateOfEstablishment}
+                  onChange={handleChange}
+                  readOnly={!editMode}
+                  icon={FaCalendarAlt}
+                  type="date"
+                />
+                <InputField
+                  label="Street Address"
+                  name="address.street"
+                  value={editedData.address.street}
+                  onChange={handleChange}
+                  readOnly={!editMode}
+                  icon={FaHome}
+                  error={validationErrors['address.street']}
+                />
+                <InputField
+                  label="City"
+                  name="address.city"
+                  value={editedData.address.city}
+                  onChange={handleChange}
+                  readOnly={!editMode}
+                  icon={FaMapMarkerAlt}
+                  error={validationErrors['address.city']}
+                />
+                <InputField
+                  label="State"
+                  name="address.state"
+                  value={editedData.address.state}
+                  onChange={handleChange}
+                  readOnly={!editMode}
+                  icon={FaMapMarkerAlt}
+                  error={validationErrors['address.state']}
+                />
+                <InputField
+                  label="Pincode"
+                  name="address.pincode"
+                  value={editedData.address.pincode}
+                  onChange={handleChange}
+                  readOnly={!editMode}
+                  icon={FaMapMarkerAlt}
+                  type="text" // Keep as text to allow validation regex on string
+                  error={validationErrors['address.pincode']}
+                />
+              </motion.div>
+            )}
 
-          {activeTab === 'business' && (
-            <motion.div
-              key="business-tab"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3 }}
-              className="p-4 rounded-xl bg-white/60 backdrop-blur-sm border border-white/70 shadow-lg"
-            >
-              <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4 flex items-center">
-                <FaBriefcase className="mr-2 text-lime-600 text-xl" /> Business Information
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-3 gap-y-2">
-                <InputField label="Company Name" name="companyName" value={editedData.companyName} onChange={handleChange} readOnly={!editMode} icon={FaRegBuilding} error={validationErrors.companyName} />
+            {activeTab === 'business' && (
+              <motion.div
+                key="business"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                transition={{ duration: 0.2 }}
+                className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4"
+              >
                 <InputField
                   label="Business Type"
                   name="businessType"
                   value={editedData.businessType}
                   onChange={handleChange}
-                  type="select"
                   readOnly={!editMode}
-                  icon={FaSeedling}
-                  options={[{ value: 'SME', label: 'SME' }, { value: 'FPO', label: 'FPO' }]}
+                  icon={FaBriefcase}
+                  type="select"
+                  options={[
+                    { value: 'SME', label: 'SME (Small/Medium Enterprise)' },
+                    { value: 'FPO', label: 'FPO (Farmer Producer Organization)' },
+                  ]}
+                  error={validationErrors.businessType}
                 />
                 {editedData.businessType === 'FPO' && (
-                  <InputField label="Number of Farmers" name="numberOfFarmers" value={editedData.numberOfFarmers} onChange={handleChange} type="number" readOnly={!editMode} icon={FaUsers} error={validationErrors.numberOfFarmers} />
+                  <InputField
+                    label="Number of Farmers"
+                    name="numberOfFarmers"
+                    value={editedData.numberOfFarmers}
+                    onChange={handleChange}
+                    readOnly={!editMode}
+                    icon={FaUsers}
+                    type="number"
+                    error={validationErrors.numberOfFarmers}
+                  />
                 )}
-                <InputField label="Date of Establishment" name="dateOfEstablishment" value={editedData.dateOfEstablishment} onChange={handleChange} type="date" readOnly={!editMode} icon={FaCalendarAlt} />
-                <div className="md:col-span-2">
-                  <InputField label="Business Description" name="businessDescription" value={editedData.businessDescription} onChange={handleChange} readOnly={!editMode} type="textarea" icon={FaInfoCircle} />
-                </div>
-              </div>
-            </motion.div>
-          )}
+                <InputField
+                  label="Business Description"
+                  name="businessDescription"
+                  value={editedData.businessDescription}
+                  onChange={handleChange}
+                  readOnly={!editMode}
+                  icon={FaInfoCircle}
+                  type="textarea"
+                />
+                {/* Shop Photo (reusing FileInputField) */}
+                <FileInputField
+                  label="Shop/Farm Photo"
+                  name="shopPhoto"
+                  value={editedData.shopPhoto}
+                  onChange={handleFileChange}
+                  readOnly={!editMode}
+                  icon={FaStore}
+                  allowedTypes={['image/jpeg', 'image/png', 'image/gif']}
+                  fileTypeLabel="JPG, PNG, GIF"
+                  displayUrl={docUrls.shopPhoto}
+                  MAX_FILE_SIZE_MB={MAX_FILE_SIZE_MB}
+                  error={validationErrors.shopPhoto}
+                />
+              </motion.div>
+            )}
 
-          {activeTab === 'documents' && (
-            <motion.div
-              key="documents-tab"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3 }}
-              className="p-4 rounded-xl bg-white/60 backdrop-blur-sm border border-white/70 shadow-lg"
-            >
-              <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4 flex items-center">
-                <FaFileAlt className="mr-2 text-lime-600 text-xl" /> Required Documents
-              </h2>
-              <p className="text-sm text-gray-600 mb-4">
-                Please upload files (max {MAX_FILE_SIZE_MB}MB per file).
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-3 gap-y-2">
-                <FileInputField label="Shop/Business Photo" name="shopPhoto" value={editedData.shopPhoto} onChange={handleFileChange} readOnly={!editMode} icon={FaStore} error={validationErrors.shopPhoto} allowedTypes={['image/jpeg', 'image/png', 'image/gif']} fileTypeLabel="Images (JPG, PNG, GIF)" displayUrl={docUrls.shopPhoto} />
-                <FileInputField label="Company Registration Document" name="companyRegistrationDoc" value={editedData.companyRegistrationDoc} onChange={handleFileChange} readOnly={!editMode} icon={FaRegBuilding} error={validationErrors.companyRegistrationDoc} allowedTypes={['application/pdf']} fileTypeLabel="PDF" displayUrl={docUrls.companyRegistrationDoc} />
-                <FileInputField label="GST Certificate" name="gstCertificate" value={editedData.gstCertificate} onChange={handleFileChange} readOnly={!editMode} icon={FaFileAlt} error={validationErrors.gstCertificate} allowedTypes={['application/pdf']} fileTypeLabel="PDF" displayUrl={docUrls.gstCertificate} />
-                <FileInputField label="Bank Details Document" name="bankDetailsDoc" value={editedData.bankDetailsDoc} onChange={handleFileChange} readOnly={!editMode} icon={FaMoneyBillWave} error={validationErrors.bankDetailsDoc} allowedTypes={['application/pdf']} fileTypeLabel="PDF" displayUrl={docUrls.bankDetailsDoc} />
-                <FileInputField label="Contact Person ID Proof" name="idProofDoc" value={editedData.idProofDoc} onChange={handleFileChange} readOnly={!editMode} icon={FaIdCard} error={validationErrors.idProofDoc} allowedTypes={['application/pdf']} fileTypeLabel="PDF" displayUrl={docUrls.idProofDoc} />
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
+            {activeTab === 'documents' && (
+              <motion.div
+                key="documents"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                transition={{ duration: 0.2 }}
+                className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4"
+              >
+                <FileInputField
+                  label="Company Registration Document"
+                  name="companyRegistrationDoc"
+                  value={editedData.companyRegistrationDoc}
+                  onChange={handleFileChange}
+                  readOnly={!editMode}
+                  icon={FaRegFilePdf}
+                  allowedTypes={['application/pdf']}
+                  fileTypeLabel="PDF"
+                  displayUrl={docUrls.companyRegistrationDoc}
+                  MAX_FILE_SIZE_MB={MAX_FILE_SIZE_MB}
+                  error={validationErrors.companyRegistrationDoc}
+                />
+                <FileInputField
+                  label="GST Certificate"
+                  name="gstCertificate"
+                  value={editedData.gstCertificate}
+                  onChange={handleFileChange}
+                  readOnly={!editMode}
+                  icon={FaRegFilePdf}
+                  allowedTypes={['application/pdf']}
+                  fileTypeLabel="PDF"
+                  displayUrl={docUrls.gstCertificate}
+                  MAX_FILE_SIZE_MB={MAX_FILE_SIZE_MB}
+                  error={validationErrors.gstCertificate}
+                />
+                <FileInputField
+                  label="Bank Details Document"
+                  name="bankDetailsDoc"
+                  value={editedData.bankDetailsDoc}
+                  onChange={handleFileChange}
+                  readOnly={!editMode}
+                  icon={FaMoneyBillWave}
+                  allowedTypes={['application/pdf']}
+                  fileTypeLabel="PDF"
+                  displayUrl={docUrls.bankDetailsDoc}
+                  MAX_FILE_SIZE_MB={MAX_FILE_SIZE_MB}
+                  error={validationErrors.bankDetailsDoc}
+                />
+                <FileInputField
+                  label="ID Proof Document"
+                  name="idProofDoc"
+                  value={editedData.idProofDoc}
+                  onChange={handleFileChange}
+                  readOnly={!editMode}
+                  icon={FaIdCard}
+                  allowedTypes={['application/pdf']}
+                  fileTypeLabel="PDF"
+                  displayUrl={docUrls.idProofDoc}
+                  MAX_FILE_SIZE_MB={MAX_FILE_SIZE_MB}
+                  error={validationErrors.idProofDoc}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
     </div>
   );
