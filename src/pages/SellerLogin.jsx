@@ -6,7 +6,8 @@ import {
   Mail, Lock, Loader, Check, X,
 } from 'lucide-react';
 
-const SellerLogin = ({ handleSellerLogin }) => {
+// The handleSellerLogin prop has been removed as the component will now handle token storage itself.
+const SellerLogin = () => {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     email: '',
@@ -97,10 +98,15 @@ const SellerLogin = ({ handleSellerLogin }) => {
       }
 
       const data = await response.json();
+      
+      // Save the token to local storage directly in this component
+      // This is the key change to fix the authentication issue
+      localStorage.setItem('token', data.token);
+
       // Assuming the backend returns { token, user: { ...sellerData } }
       // The 'user' key here actually holds the seller's data for consistency with buyer login structure
-      handleSellerLogin(data.token, data.user); // Pass token and seller data to App.jsx handler
-
+      // Removed the call to handleSellerLogin, as it's no longer needed
+      
       showToastMessage('Login successful! Redirecting to dashboard...', 'success');
       setTimeout(() => {
         navigate('/seller-dashboard'); // Redirect to seller dashboard

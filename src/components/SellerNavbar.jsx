@@ -103,7 +103,7 @@ const SellerNavbar = () => {
       localStorage.removeItem('sellerData'); // Clear invalid data
       if (err.response && err.response.status === 401) {
           // Token expired or invalid, force re-login
-          localStorage.removeItem('sellerAuthToken');
+          localStorage.removeItem('token');
           navigate('/seller-login'); // Redirect to login
           // Optionally, add a toast message
           // toast.error('Your session has expired. Please log in again.');
@@ -114,7 +114,7 @@ const SellerNavbar = () => {
 
   // Check seller login status and load seller data
   useEffect(() => {
-    const token = localStorage.getItem('sellerAuthToken');
+    const token = localStorage.getItem('token');
     const storedSellerData = localStorage.getItem('sellerData');
 
     if (token) {

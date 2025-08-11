@@ -437,7 +437,7 @@ const SellerProfile = () => {
   const fetchSellerProfile = useCallback(async () => {
     setLoading(true);
     setError('');
-    const authToken = localStorage.getItem('sellerAuthToken');
+    const authToken = localStorage.getItem('token');
 
     if (!authToken) {
       showToastMessage('You are not logged in. Please log in to view your profile.', 'error');
