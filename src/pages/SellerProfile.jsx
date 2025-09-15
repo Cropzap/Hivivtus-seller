@@ -12,6 +12,7 @@ import { useNavigate } from 'react-router-dom';
 
 // Assuming axios is installed: npm install axios
 import axios from 'axios';
+const API_URL = import.meta.env.REACT_APP_API_URL;
 
 // Helper for Input Fields (No changes needed here)
 const InputField = ({ label, name, value, type = 'text', readOnly = false, icon: Icon, options, onChange, error }) => (
@@ -447,7 +448,7 @@ const SellerProfile = () => {
     }
 
     try {
-      const response = await axios.get('http://localhost:5000/api/sellerprofile', {
+      const response = await axios.get(`${API_URL}sellerprofile`, {
         headers: {
           'Content-Type': 'application/json',
           'x-auth-token': authToken,
@@ -610,7 +611,7 @@ const SellerProfile = () => {
     // --- End Client-Side Validation ---
 
     try {
-      const response = await axios.put('http://localhost:5000/api/sellerprofile', editedData, {
+      const response = await axios.put(`${API_URL}sellerprofile`, editedData, {
         headers: {
           'Content-Type': 'application/json',
           'x-auth-token': authToken,

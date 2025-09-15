@@ -18,6 +18,7 @@ const SellerLogin = () => {
   const [toastMessage, setToastMessage] = useState('');
   const [toastType, setToastType] = useState('success'); // 'success' or 'error'
   const [validationErrors, setValidationErrors] = useState({}); // For input-specific errors
+  const API_URL = import.meta.env.REACT_APP_API_URL;
 
   const showToastMessage = useCallback((message, type = 'success') => {
     setToastMessage(message);
@@ -75,7 +76,7 @@ const SellerLogin = () => {
     // --- End Client-Side Validation ---
 
     try {
-      const response = await fetch('http://localhost:5000/api/seller-auth/login', { // NEW LOGIN ENDPOINT
+      const response = await fetch(`${API_URL}seller-auth/login`, { // NEW LOGIN ENDPOINT
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

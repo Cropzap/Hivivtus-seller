@@ -20,7 +20,7 @@ import {
   PlusCircle, // For Add Farmers action
   Store, // General seller icon
 } from "lucide-react";
-import SellerLogo from "../assets/cropzap.png"; // Assuming you have a seller-specific logo
+import SellerLogo from "../assets/Hivictus.png"; // Assuming you have a seller-specific logo
 import axios from 'axios'; // Import axios for API calls
 
 // Helper component for Mobile Navigation Items

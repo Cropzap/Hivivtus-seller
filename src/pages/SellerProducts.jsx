@@ -4,8 +4,8 @@ import {
   PlusCircle, Edit, Trash2, X, Loader, Image as ImageIcon, Tag, Text, DollarSign, Package, Scale,
   List, Layers, Info, Check, AlertCircle, ShoppingBag, Box, Grid, Percent
 } from 'lucide-react';
-// Note: We're keeping the useNavigate hook, assuming a routing context exists.
 import { useNavigate } from 'react-router-dom';
+const API_URL = import.meta.env.REACT_APP_API_URL;
 
 // Helper for Input Fields - Updated with new styling
 const InputField = ({ label, name, value, type = 'text', icon: Icon, options, onChange, error, placeholder }) => (
@@ -22,7 +22,6 @@ const InputField = ({ label, name, value, type = 'text', icon: Icon, options, on
           onChange={onChange}
           className={`w-full p-2.5 rounded-lg border-2 transition-all duration-200 text-sm bg-white border-gray-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-gray-900 shadow-sm appearance-none pr-10
                       ${error ? 'border-red-500' : ''} disabled:bg-gray-100 disabled:cursor-not-allowed`}
-          // SVG background image for the dropdown arrow, styled to match the new color
           style={{ backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2334D399' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.5rem center', backgroundSize: '1.5em 1.5em' }}
         >
           <option value="">Select {label}</option>
@@ -164,7 +163,7 @@ const SellerProducts = () => {
 
   const fetchCategories = useCallback(async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/categories');
+      const response = await fetch(`${API_URL}categories`);
       if (!response.ok) {
         throw new Error('Failed to fetch categories.');
       }
@@ -186,7 +185,7 @@ const SellerProducts = () => {
     }
 
     try {
-      const response = await fetch('http://localhost:5000/api/products/seller', {
+      const response = await fetch(`${API_URL}products/seller`, {
         headers: { 'x-auth-token': authToken },
       });
       if (!response.ok) {
@@ -207,12 +206,49 @@ const SellerProducts = () => {
     }
   }, [navigate, showToast]);
 
+  const fetchSellerStatus = useCallback(async () => {
+    const authToken = localStorage.getItem('token');
+    if (!authToken) {
+      showToast('Authentication token missing. Please log in.', 'error');
+      // No navigation here as per the new requirement for unapproved status
+      return null;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}sellerprofile/seller/me`, {
+        headers: { 'x-auth-token': authToken },
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to fetch seller status.');
+      }
+      const data = await response.json();
+      return data.sellerStatus;
+    } catch (err) {
+      console.error('Error fetching seller status:', err.message);
+      showToast(err.message || 'Failed to fetch seller status.', 'error');
+      if (err.message.includes('token') || err.message.includes('Authentication') || err.message.includes('Access denied')) {
+        setTimeout(() => navigate('/seller-login'), 1500);
+      }
+      return null;
+    }
+  }, [navigate, showToast]);
+
   useEffect(() => {
     fetchCategories();
     fetchSellerProducts();
   }, [fetchCategories, fetchSellerProducts]);
 
-  const openModal = (product = null) => {
+  const openModal = async (product = null) => {
+    if (!product) { // Only check for adding a new product
+      const status = await fetchSellerStatus();
+      if (status !== 'approved') {
+        showToast('Your account is not yet approved. You must be approved by an admin to add new products.', 'error');
+        navigate('/seller-dashboard'); // Navigate to home page as requested
+        return;
+      }
+    }
+    
     setCurrentProduct(product);
     setValidationErrors({});
     setError('');
@@ -291,7 +327,7 @@ const SellerProducts = () => {
     try {
       let response;
       if (currentProduct) {
-        response = await fetch(`http://localhost:5000/api/products/${currentProduct._id}`, {
+        response = await fetch(`${API_URL}products/${currentProduct._id}`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -300,7 +336,7 @@ const SellerProducts = () => {
           body: JSON.stringify(formData),
         });
       } else {
-        response = await fetch('http://localhost:5000/api/products', {
+        response = await fetch(`${API_URL}products`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -346,7 +382,7 @@ const SellerProducts = () => {
     }
 
     try {
-      const response = await fetch(`http://localhost:5000/api/products/${productToDelete}`, {
+      const response = await fetch(`${API_URL}products/${productToDelete}`, {
         method: 'DELETE',
         headers: { 'x-auth-token': authToken },
       });
@@ -391,11 +427,8 @@ const SellerProducts = () => {
   };
 
   return (
-    // Outer container with requested m-16 top margin
     <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8 font-sans mt-16">
       <div className="bg-white rounded-3xl shadow-2xl p-6 sm:p-8 lg:p-10 w-full max-w-screen mx-auto border border-gray-100">
-
-        {/* Header Section */}
         <div className="flex justify-between items-center mb-8 flex-wrap gap-4">
           <h1 className="text-3xl sm:text-4xl font-extrabold text-emerald-900 flex items-center">
             <ShoppingBag className="mr-3 text-emerald-600" size={36} /> My Products
@@ -410,7 +443,6 @@ const SellerProducts = () => {
           </motion.button>
         </div>
 
-        {/* Error Display */}
         {error && (
           <motion.div
             initial={{ opacity: 0, y: -10 }}
@@ -423,7 +455,6 @@ const SellerProducts = () => {
           </motion.div>
         )}
 
-        {/* Product List - Grid of Cards */}
         {loading ? (
           <div className="flex flex-col items-center justify-center py-10 text-emerald-700">
             <Loader size={48} className="animate-spin mb-4" />
@@ -479,7 +510,7 @@ const SellerProducts = () => {
                   <div className="flex space-x-2 justify-end mt-auto">
                     <motion.button
                       onClick={() => openModal(product)}
-                      whileHover={{ scale: 1.05, backgroundColor: '#10B981' }} // emerald-500 hover
+                      whileHover={{ scale: 1.05, backgroundColor: '#10B981' }}
                       whileTap={{ scale: 0.95 }}
                       className="flex items-center bg-emerald-500 text-white px-3 py-1.5 rounded-full shadow-md transition-all duration-200 hover:shadow-lg text-xs sm:text-sm font-semibold"
                     >
@@ -501,7 +532,6 @@ const SellerProducts = () => {
         )}
       </div>
 
-      {/* Product Add/Edit Modal */}
       <AnimatePresence>
         {isModalOpen && (
           <motion.div
@@ -655,7 +685,6 @@ const SellerProducts = () => {
         )}
       </AnimatePresence>
 
-      {/* Delete Confirmation Modal */}
       <AnimatePresence>
         {isConfirmModalOpen && (
           <motion.div
@@ -696,7 +725,6 @@ const SellerProducts = () => {
         )}
       </AnimatePresence>
 
-      {/* Toast Notification */}
       <AnimatePresence>
         {toastMessage && (
           <motion.div

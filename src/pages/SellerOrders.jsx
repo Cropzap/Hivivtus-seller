@@ -66,6 +66,8 @@ const statusMap = {
   'Cancelled': { color: 'bg-red-100 text-red-800', icon: X },
 };
 
+const API_URL = import.meta.env.REACT_APP_API_URL;
+
 const SellerOrders = () => {
   // State for all orders fetched from the backend
   const [allOrders, setAllOrders] = useState([]);
@@ -115,7 +117,7 @@ const SellerOrders = () => {
     }
 
     try {
-      const response = await fetch('http://localhost:5000/api/orders/seller', {
+      const response = await fetch(`${API_URL}orders/seller`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -304,7 +306,7 @@ const SellerOrders = () => {
     }
 
     try {
-      const response = await fetch(`http://localhost:5000/api/orders/seller/${selectedOrder._id}/status`, {
+      const response = await fetch(`${API_URL}orders/seller/${selectedOrder._id}/status`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

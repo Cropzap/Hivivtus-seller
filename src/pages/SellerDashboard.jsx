@@ -6,10 +6,11 @@ import axios from 'axios';
 
 // The API URLs for your backend routes.
 // NOTE: These URLs assume a seller-specific endpoint structure.
-const SELLER_PROFILE_API_URL = 'http://localhost:5000/api/sellerprofile'; 
-const SELLER_ORDERS_API_URL = "http://localhost:5000/api/orders/seller"; 
-const SELLER_PRODUCTS_API_URL = "http://localhost:5000/api/products";
-const SELLER_TICKETS_API_URL = "http://localhost:5000/api/seller/support-tickets";
+const API_URL = import.meta.env.REACT_APP_API_URL;
+const SELLER_PROFILE_API_URL = `${API_URL}sellerprofile`;
+const SELLER_ORDERS_API_URL = `${API_URL}orders/seller`;
+const SELLER_PRODUCTS_API_URL = `${API_URL}products`;
+const SELLER_TICKETS_API_URL = `${API_URL}sellersupport-tickets`;
 
 /**
  * MetricCard Component
@@ -431,7 +432,7 @@ useEffect(() => {
   const totalOrders = orders.length;
   const totalSales = orders.reduce((sum, order) => sum + order.items.reduce((itemSum, item) => itemSum + item.quantity, 0), 0);
   const totalRevenue = orders.reduce((sum, order) => sum + order.totalAmount, 0).toFixed(2);
-  const pendingOrders = orders.filter(o => o.status === 'pending' || o.status === 'processing').length;
+  const pendingOrders = orders.filter(o => o.status === 'Pending' || o.status === 'processing').length;
   const totalTickets = tickets.length;
   const openTickets = tickets.filter(t => t.status === 'Open').length;
   
@@ -536,15 +537,15 @@ const getpStatusColor = (status) => {
     
     {/* Action Buttons */}
     <div className="flex space-x-2 md:space-x-3 mt-4 md:mt-0">
-      <Link
-        to="/seller"
+      {/* <Link
+        to="seller-profile"
         className="p-3 rounded-full bg-emerald-500 text-white shadow-md hover:bg-emerald-600 transition-colors duration-200"
         aria-label="View Profile"
       >
         <FaUserCircle className="text-xl" />
-      </Link>
+      </Link> */}
       <Link
-        to="/seller/edit"
+        to="/seller-profile"
         className="p-3 rounded-full bg-gray-200 text-gray-700 shadow-md hover:bg-gray-300 transition-colors duration-200"
         aria-label="Edit Profile"
       >
@@ -557,34 +558,34 @@ const getpStatusColor = (status) => {
           {/* New Navigation Menu */}
           <div className="bg-white rounded-2xl shadow-lg p-4 w-full">
             <nav className="space-y-2">
-              <button 
-                onClick={() => setActiveTab('overview')}
-                className={`flex items-center w-full px-4 py-2 text-gray-700 font-semibold rounded-xl hover:bg-gray-100 transition-colors duration-200 ${activeTab === 'overview' ? 'bg-gray-100 text-emerald-600' : ''}`}
+              <Link 
+                to="/seller-orders" 
+                className="flex items-center px-4 py-2 text-gray-700 font-semibold rounded-xl hover:bg-gray-100 transition-colors duration-200"
               >
-                <FaHistory className="mr-3 text-lg" />
-                Overview
-              </button>
-              <button 
-                onClick={() => setActiveTab('orders')}
-                className={`flex items-center w-full px-4 py-2 text-gray-700 font-semibold rounded-xl hover:bg-gray-100 transition-colors duration-200 ${activeTab === 'orders' ? 'bg-gray-100 text-emerald-600' : ''}`}
+                <FaShoppingCart className="mr-3 text-lg text-emerald-600" />
+                Orders
+              </Link>
+              <Link 
+                to="/support" 
+                className="flex items-center px-4 py-2 text-gray-700 font-semibold rounded-xl hover:bg-gray-100 transition-colors duration-200"
               >
-                <FaShoppingCart className="mr-3 text-lg" />
-                My Orders
-              </button>
-              <button 
-                onClick={() => setActiveTab('products')}
-                className={`flex items-center w-full px-4 py-2 text-gray-700 font-semibold rounded-xl hover:bg-gray-100 transition-colors duration-200 ${activeTab === 'products' ? 'bg-gray-100 text-emerald-600' : ''}`}
-              >
-                <FaStore className="mr-3 text-lg" />
-                My Products
-              </button>
-              <button 
-                onClick={() => setActiveTab('supportTickets')}
-                className={`flex items-center w-full px-4 py-2 text-gray-700 font-semibold rounded-xl hover:bg-gray-100 transition-colors duration-200 ${activeTab === 'supportTickets' ? 'bg-gray-100 text-emerald-600' : ''}`}
-              >
-                <FaTicketAlt className="mr-3 text-lg" />
+                <FaTicketAlt className="mr-3 text-lg text-emerald-600" />
                 Support Tickets
-              </button>
+              </Link>
+              <Link 
+                to="/terms-and-conditions" 
+                className="flex items-center px-4 py-2 text-gray-700 font-semibold rounded-xl hover:bg-gray-100 transition-colors duration-200"
+              >
+                <FaFileAlt className="mr-3 text-lg text-emerald-600" />
+                Terms & Conditions
+              </Link>
+              <Link 
+                to="/faq" 
+                className="flex items-center px-4 py-2 text-gray-700 font-semibold rounded-xl hover:bg-gray-100 transition-colors duration-200"
+              >
+                <FaQuestionCircle className="mr-3 text-lg text-emerald-600" />
+                FAQ
+              </Link>
               <button 
                 onClick={handleLogout} 
                 className="flex items-center w-full text-left px-4 py-2 text-gray-700 font-semibold rounded-xl hover:bg-gray-100 transition-colors duration-200"
@@ -596,7 +597,7 @@ const getpStatusColor = (status) => {
           </div>
 
           {/* Last Activities section from original code */}
-          <div className="bg-white rounded-2xl shadow-lg p-6 w-full">
+          {/* <div className="bg-white rounded-2xl shadow-lg p-6 w-full">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Last Activities</h2>
               <a href="#" className="text-emerald-600 hover:text-emerald-800 font-semibold text-sm transition-colors">See All</a>
@@ -611,7 +612,7 @@ const getpStatusColor = (status) => {
                 </div>
               ))}
             </div>
-          </div>
+          </div> */}
         </div>
 
         {/* Right Column (Main Content Area - Tabs) */}

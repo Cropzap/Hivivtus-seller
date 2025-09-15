@@ -10,6 +10,7 @@ import SellerProfile from './pages/SellerProfile';
 import SellerProducts from './pages/SellerProducts';
 import SellerDashboard from './pages/SellerDashboard';
 import SellerOrders from './pages/SellerOrders';
+import SupportTicket from './pages/SupportTicket';
 
 // You can keep a global CSS file if you have one
 // import './App.css';
@@ -34,6 +35,7 @@ function App() {
         <Route path="/seller-login" element={<SellerLogin handleSellerLogin={handleSellerLogin} />} />
         <Route path="/seller-profile" element={<SellerProfile />} />
         <Route path="/seller-products" element={<SellerProducts />} />
+         <Route path="/support" element={<SupportTicket />} />
         {/* Redirect root to seller signup for now */}
         <Route path="/" element={<SellerSignup />} />
 
