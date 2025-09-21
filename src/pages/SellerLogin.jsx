@@ -178,7 +178,7 @@ const SellerLogin = () => {
             </motion.span>
           </h2>
           <p className="text-lg text-gray-600">
-            Access your Zoyokart Seller Portal
+            Access your Hivictus Seller Portal
           </p>
         </div>
 
