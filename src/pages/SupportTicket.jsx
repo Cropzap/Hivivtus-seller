@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { FaTicketAlt, FaTag, FaClipboardList, FaFileAlt, FaPaperclip, FaCheckCircle, FaExclamationCircle, FaTimes, FaHashtag, FaHourglassHalf, FaEye, FaCalendarAlt, FaBoxOpen, FaCommentDots, FaTrashAlt, FaChevronLeft, FaChevronRight, FaReply, FaUserTie, FaUser, FaSpinner } from 'react-icons/fa'; // Added FaSpinner, FaUserTie, FaUser (for buyer in replies)
 import { motion, AnimatePresence } from 'framer-motion';
 
-const API_URL = import.meta.env.REACT_APP_API_URL;
+const API_URL = import.meta.env.VITE_API_URL;
 // --- Helper to get status badge styling ---
 const getStatusBadge = (status) => {
   let colorClass = '';

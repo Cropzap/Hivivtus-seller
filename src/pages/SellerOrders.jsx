@@ -66,7 +66,7 @@ const statusMap = {
   'Cancelled': { color: 'bg-red-100 text-red-800', icon: X },
 };
 
-const API_URL = import.meta.env.REACT_APP_API_URL;
+const API_URL = import.meta.env.VITE_API_URL;
 
 const SellerOrders = () => {
   // State for all orders fetched from the backend

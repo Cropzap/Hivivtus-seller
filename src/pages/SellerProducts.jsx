@@ -5,7 +5,7 @@ import {
   List, Layers, Info, Check, AlertCircle, ShoppingBag, Box, Grid, Percent
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-const API_URL = import.meta.env.REACT_APP_API_URL;
+const API_URL = import.meta.env.VITE_API_URL;
 
 // Helper for Input Fields - Updated with new styling
 const InputField = ({ label, name, value, type = 'text', icon: Icon, options, onChange, error, placeholder }) => (

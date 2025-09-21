@@ -353,13 +353,13 @@ const SellerNavbar = () => {
         initial={{ y: -50, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.5 }}
-        className="md:hidden fixed top-0 left-0 w-full bg-green-800/90 backdrop-blur-md shadow-sm p-1 flex justify-between items-center z-50"
+        className="md:hidden fixed top-0 left-0 w-full bg-white backdrop-blur-md shadow-sm p-1 flex justify-between items-center z-50"
       >
         <Link to="/seller-dashboard" className="flex flex-row items-center">
           <img
             src={SellerLogo}
             alt="Seller Portal Logo"
-            className="object-contain h-10 w-auto"
+            className="object-contain h-16 w-auto"
           />
         </Link>
         <button

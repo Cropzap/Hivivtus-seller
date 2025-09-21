@@ -18,7 +18,7 @@ const SellerLogin = () => {
   const [toastMessage, setToastMessage] = useState('');
   const [toastType, setToastType] = useState('success'); // 'success' or 'error'
   const [validationErrors, setValidationErrors] = useState({}); // For input-specific errors
-  const API_URL = import.meta.env.REACT_APP_API_URL;
+  const API_URL = import.meta.env.VITE_API_URL;
 
   const showToastMessage = useCallback((message, type = 'success') => {
     setToastMessage(message);

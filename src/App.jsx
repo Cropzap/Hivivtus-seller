@@ -35,7 +35,7 @@ function App() {
         <Route path="/seller-login" element={<SellerLogin handleSellerLogin={handleSellerLogin} />} />
         <Route path="/seller-profile" element={<SellerProfile />} />
         <Route path="/seller-products" element={<SellerProducts />} />
-         <Route path="/support" element={<SupportTicket />} />
+         <Route path="/seller-support" element={<SupportTicket />} />
         {/* Redirect root to seller signup for now */}
         <Route path="/" element={<SellerSignup />} />
 

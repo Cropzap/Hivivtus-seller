@@ -12,7 +12,7 @@ import { useNavigate } from 'react-router-dom';
 
 // Assuming axios is installed: npm install axios
 import axios from 'axios';
-const API_URL = import.meta.env.REACT_APP_API_URL;
+const API_URL = import.meta.env.VITE_API_URL;
 
 // Helper for Input Fields (No changes needed here)
 const InputField = ({ label, name, value, type = 'text', readOnly = false, icon: Icon, options, onChange, error }) => (

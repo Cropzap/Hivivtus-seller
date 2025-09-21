@@ -6,7 +6,7 @@ import axios from 'axios';
 
 // The API URLs for your backend routes.
 // NOTE: These URLs assume a seller-specific endpoint structure.
-const API_URL = import.meta.env.REACT_APP_API_URL;
+const API_URL = import.meta.env.VITE_API_URL;
 const SELLER_PROFILE_API_URL = `${API_URL}sellerprofile`;
 const SELLER_ORDERS_API_URL = `${API_URL}orders/seller`;
 const SELLER_PRODUCTS_API_URL = `${API_URL}products`;
