@@ -566,7 +566,7 @@ const getpStatusColor = (status) => {
                 Orders
               </Link>
               <Link 
-                to="/support" 
+                to="/seller-support" 
                 className="flex items-center px-4 py-2 text-gray-700 font-semibold rounded-xl hover:bg-gray-100 transition-colors duration-200"
               >
                 <FaTicketAlt className="mr-3 text-lg text-emerald-600" />

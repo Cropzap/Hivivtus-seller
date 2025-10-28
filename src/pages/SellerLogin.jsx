@@ -76,7 +76,7 @@ const SellerLogin = () => {
     // --- End Client-Side Validation ---
 
     try {
-      const response = await fetch(`${API_URL}seller-auth/login`, { // NEW LOGIN ENDPOINT
+      const response = await fetch(`${API_URL}sellerauth/login`, { // NEW LOGIN ENDPOINT
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

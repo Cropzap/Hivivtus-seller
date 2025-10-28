@@ -1,11 +1,16 @@
-// src/pages/SellerSignup.jsx
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, Link } from 'react-router-dom';
 import {
-  Mail, Lock, User, Building2, Phone, MapPin, // Keeping stable Lucide icons
-  Check, X, Loader, Users, Factory // Keeping stable Lucide icons
+  Mail, Lock, User, Building2, Phone, MapPin,
+  Check, X, Loader, Users, Factory
 } from 'lucide-react';
+
+// FIX: Removing dependency on 'process.env' and 'import.meta.env' 
+// which are not available in all JavaScript environments.
+// We are setting a direct, safe fallback URL. 
+const API_BASE_URL = "http://localhost:5000"; 
+
 
 const SellerSignup = () => {
   const navigate = useNavigate();
@@ -15,7 +20,7 @@ const SellerSignup = () => {
     email: '',
     password: '',
     confirmPassword: '',
-    mobile: '', // CHANGED: From 'phone' to 'mobile' to match backend schema
+    mobile: '',
     street: '',
     city: '',
     state: '',
@@ -27,8 +32,7 @@ const SellerSignup = () => {
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastType, setToastType] = useState('success'); // 'success' or 'error'
-  const [validationErrors, setValidationErrors] = useState({}); // New state for input-specific errors
-  const API_URL = import.meta.env.VITE_API_URL;
+  const [validationErrors, setValidationErrors] = useState({});
 
 
   const showToastMessage = useCallback((message, type = 'success') => {
@@ -38,32 +42,45 @@ const SellerSignup = () => {
     setTimeout(() => setShowToast(false), 3000);
   }, []);
 
-  // Validation function
+  // Validation function updated to include Pincode check
   const validateField = useCallback((name, value) => {
     let error = '';
+    
+    // Check for general emptiness
+    if (['companyName', 'sellerName', 'email', 'mobile', 'street', 'city', 'state', 'pincode', 'password', 'confirmPassword'].includes(name) && value.trim() === '') {
+        error = 'This field is required.';
+    }
+
+    // Specific validation rules
     switch (name) {
       case 'email':
-        if (!/\S+@\S+\.\S+/.test(value)) {
+        if (value.trim() !== '' && !/\S+@\S+\.\S+/.test(value)) {
           error = 'Invalid email format.';
         }
         break;
       case 'mobile':
-        // Basic Indian mobile number validation (10 digits)
-        if (!/^\d{10}$/.test(value)) {
-          error = 'Mobile number must be 10 digits.';
+        // Mobile number must be exactly 10 digits
+        if (value.trim() !== '' && !/^\d{10}$/.test(value)) {
+          error = 'Mobile number must be exactly 10 digits.';
+        }
+        break;
+      case 'pincode':
+        // Pincode must be exactly 6 digits, matching backend
+        if (value.trim() !== '' && !/^\d{6}$/.test(value)) {
+          error = 'Pincode must be exactly 6 digits.';
         }
         break;
       case 'password':
-        if (value.length < 8) {
-          error = 'Password must be at least 8 characters.';
-        } else if (!/[A-Z]/.test(value)) {
-          error = 'Password must contain an uppercase letter.';
-        } else if (!/[a-z]/.test(value)) {
-          error = 'Password must contain a lowercase letter.';
-        } else if (!/[0-9]/.test(value)) {
-          error = 'Password must contain a number.';
-        } else if (!/[^A-Za-z0-9]/.test(value)) {
-          error = 'Password must contain a special character.';
+        if (value.length > 0 && value.length < 8) {
+          error = 'Min 8 characters.';
+        } else if (value.length > 0 && !/[A-Z]/.test(value)) {
+          error = 'Must contain an uppercase letter.';
+        } else if (value.length > 0 && !/[a-z]/.test(value)) {
+          error = 'Must contain a lowercase letter.';
+        } else if (value.length > 0 && !/[0-9]/.test(value)) {
+          error = 'Must contain a number.';
+        } else if (value.length > 0 && !/[^A-Za-z0-9]/.test(value)) {
+          error = 'Must contain a special character.';
         }
         break;
       case 'confirmPassword':
@@ -72,19 +89,18 @@ const SellerSignup = () => {
         }
         break;
       case 'numberOfFarmers':
+        // Required only for FPO
         if (formData.businessType === 'FPO' && (value === '' || parseInt(value) <= 0 || isNaN(parseInt(value)))) {
-          error = 'Number of farmers must be a positive number.';
+          error = 'Must be a positive number for FPO.';
         }
         break;
       default:
-        if (value.trim() === '') {
-          error = 'This field is required.';
-        }
         break;
     }
+
     setValidationErrors(prev => ({ ...prev, [name]: error }));
     return error === '';
-  }, [formData.password, formData.businessType]); // Depend on formData.password and businessType
+  }, [formData.password, formData.businessType]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -99,35 +115,38 @@ const SellerSignup = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setShowToast(false); // Hide previous toast
-    setValidationErrors({}); // Clear previous validation errors
-
+    setShowToast(false);
+    
     const { companyName, sellerName, email, password, confirmPassword, mobile, street, city, state, pincode, businessType, numberOfFarmers } = formData;
 
-    // --- Full Client-Side Validation ---
+    // --- Full Client-Side Validation Check ---
     let isValid = true;
-    const requiredFields = ['companyName', 'sellerName', 'email', 'password', 'confirmPassword', 'mobile', 'street', 'city', 'state', 'pincode'];
-    requiredFields.forEach(field => {
-      if (!validateField(field, formData[field])) {
-        isValid = false;
-      }
-    });
-
-    if (businessType === 'FPO') {
-        if (!validateField('numberOfFarmers', numberOfFarmers)) {
+    const fieldsToValidate = ['companyName', 'sellerName', 'email', 'password', 'confirmPassword', 'mobile', 'street', 'city', 'state', 'pincode'];
+    
+    // Validate all required fields
+    fieldsToValidate.forEach(field => {
+        if (!validateField(field, formData[field])) {
             isValid = false;
         }
+    });
+
+    // Validate conditional FPO field
+    if (businessType === 'FPO' && !validateField('numberOfFarmers', numberOfFarmers)) {
+        isValid = false;
     }
 
     if (!isValid) {
-      showToastMessage('Please correct the validation errors.', 'error');
+      showToastMessage('Please correct the validation errors before submitting.', 'error');
       setLoading(false);
       return;
     }
-    // --- End Client-Side Validation ---
+    // --- End Client-Side Validation Check ---
 
     try {
-      const response = await fetch(`${API_URL}seller-auth/register`, {
+      // CRITICAL FIX: Ensure the endpoint matches the backend route: /api/sellerauth/register (no hyphen in 'auth')
+      const fullUrl = `${API_BASE_URL.replace(/\/$/, '')}/api/sellerauth/register`; 
+      
+      const response = await fetch(fullUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -137,45 +156,56 @@ const SellerSignup = () => {
           sellerName,
           email,
           password,
-          mobile, // CHANGED: 'phone' is now 'mobile'
+          mobile,
+          // Address structured as a nested object, as required by the backend model
           address: { street, city, state, pincode },
           businessType,
-          numberOfFarmers: businessType === 'FPO' ? parseInt(numberOfFarmers) : undefined,
+          // Conditionally include and parse numberOfFarmers
+          ...((businessType === 'FPO' && numberOfFarmers) && { numberOfFarmers: parseInt(numberOfFarmers) }),
         }),
       });
 
       if (!response.ok) {
-        // Attempt to parse JSON error first
         let errorData;
         try {
           errorData = await response.json();
         } catch (jsonError) {
-          // If JSON parsing fails, read as plain text
-          const textError = await response.text();
-          throw new Error(textError || 'An unknown server error occurred.');
+          // Fallback error message if the server response is not JSON
+          throw new Error(`Server Error (${response.status}): Could not process response.`);
         }
-        throw new Error(errorData.message || 'Registration failed.');
+        
+        // Use the specific backend message for clarity
+        throw new Error(errorData.message || `Registration failed with status ${response.status}.`);
       }
 
-      showToastMessage('Registration successful! Your application is under review. We will notify you once approved.', 'success');
+      // Success
+      showToastMessage('Registration successful! Your application is under review.', 'success');
       // Clear form data after successful submission
       setFormData({
         companyName: '', sellerName: '', email: '', password: '', confirmPassword: '',
         mobile: '', street: '', city: '', state: '', pincode: '',
         businessType: 'SME', numberOfFarmers: ''
       });
-      setValidationErrors({}); // Clear validation errors
+      setValidationErrors({});
       
-      // Removed navigate for now as per previous discussion about minimal app
-      // If you re-introduce login page, uncomment navigate
-      // setTimeout(() => {
-      //   navigate('/seller-login'); // Redirect to login page after successful submission
-      // }, 3000); 
+      setTimeout(() => {
+        navigate('/seller-login'); // Redirect to login page
+      }, 3000); 
 
     } catch (err) {
       console.error('Seller registration error:', err);
-      // Display the specific error message from the backend or a generic one
-      showToastMessage(err.message || 'An unexpected error occurred during registration.', 'error');
+      
+      let displayMessage = err.message || 'A network error occurred. Please check your connection.';
+
+      // VITAL: Improve user clarity for unique constraint errors
+      if (displayMessage.toLowerCase().includes('unique data constraint') || 
+          displayMessage.toLowerCase().includes('duplicate key') || 
+          displayMessage.toLowerCase().includes('already registered')) {
+        displayMessage = "Registration failed! An account with this Email or Mobile number already exists. Please use unique credentials.";
+      }
+
+      // Display the specific (or refined) error message
+      showToastMessage(displayMessage, 'error');
     } finally {
       setLoading(false);
     }
@@ -209,14 +239,14 @@ const SellerSignup = () => {
         animate={{ rotate: 360 }}
         transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
       >
-        <span style={{ fontSize: '80px' }}>🍃</span> {/* Replaced Leaf with emoji */}
+        <span style={{ fontSize: '80px' }}>🍃</span>
       </motion.div>
       <motion.div
         className="absolute bottom-10 right-10 text-lime-400 opacity-20"
         animate={{ rotate: -360 }}
         transition={{ duration: 25, repeat: Infinity, ease: "linear", delay: 5 }}
       >
-        <span style={{ fontSize: '100px' }}>🚜</span> {/* Replaced Tractor with emoji */}
+        <span style={{ fontSize: '100px' }}>🚜</span>
       </motion.div>
 
 
@@ -282,6 +312,7 @@ const SellerSignup = () => {
               placeholder="Company Name"
               value={formData.companyName}
               onChange={handleChange}
+              onBlur={() => validateField('companyName', formData.companyName)}
               className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:border-green-500 transition-all duration-200 shadow-sm ${validationErrors.companyName ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-green-500'}`}
               required
             />
@@ -297,6 +328,7 @@ const SellerSignup = () => {
               placeholder="Contact Person Name"
               value={formData.sellerName}
               onChange={handleChange}
+              onBlur={() => validateField('sellerName', formData.sellerName)}
               className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:border-green-500 transition-all duration-200 shadow-sm ${validationErrors.sellerName ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-green-500'}`}
               required
             />
@@ -312,6 +344,7 @@ const SellerSignup = () => {
               placeholder="Email Address"
               value={formData.email}
               onChange={handleChange}
+              onBlur={() => validateField('email', formData.email)}
               className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:border-green-500 transition-all duration-200 shadow-sm ${validationErrors.email ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-green-500'}`}
               required
             />
@@ -327,6 +360,7 @@ const SellerSignup = () => {
               placeholder="Password"
               value={formData.password}
               onChange={handleChange}
+              onBlur={() => validateField('password', formData.password)}
               className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:border-green-500 transition-all duration-200 shadow-sm ${validationErrors.password ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-green-500'}`}
               required
             />
@@ -342,6 +376,7 @@ const SellerSignup = () => {
               placeholder="Confirm Password"
               value={formData.confirmPassword}
               onChange={handleChange}
+              onBlur={() => validateField('confirmPassword', formData.confirmPassword)}
               className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:border-green-500 transition-all duration-200 shadow-sm ${validationErrors.confirmPassword ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-green-500'}`}
               required
             />
@@ -353,12 +388,14 @@ const SellerSignup = () => {
             <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-green-600 transition-colors" size={20} />
             <input
               type="tel"
-              name="mobile" // CHANGED: Name is now 'mobile'
+              name="mobile"
               placeholder="Mobile Number (10 digits)"
-              value={formData.mobile} // Access formData.mobile
+              value={formData.mobile}
               onChange={handleChange}
+              onBlur={() => validateField('mobile', formData.mobile)}
               className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:border-green-500 transition-all duration-200 shadow-sm ${validationErrors.mobile ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-green-500'}`}
               required
+              maxLength={10}
             />
             {validationErrors.mobile && <p className="text-red-500 text-xs mt-1">{validationErrors.mobile}</p>}
           </motion.div>
@@ -373,47 +410,52 @@ const SellerSignup = () => {
                 placeholder="Street Address"
                 value={formData.street}
                 onChange={handleChange}
+                onBlur={() => validateField('street', formData.street)}
                 className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:border-green-500 transition-all duration-200 shadow-sm ${validationErrors.street ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-green-500'}`}
                 required
               />
               {validationErrors.street && <p className="text-red-500 text-xs mt-1">{validationErrors.street}</p>}
             </div>
             <div className="relative group">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-green-600 transition-colors text-xl">🏙️</span> {/* Replaced City with emoji */}
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-green-600 transition-colors text-xl">🏙️</span>
               <input
                 type="text"
                 name="city"
                 placeholder="City"
                 value={formData.city}
                 onChange={handleChange}
+                onBlur={() => validateField('city', formData.city)}
                 className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:border-green-500 transition-all duration-200 shadow-sm ${validationErrors.city ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-green-500'}`}
                 required
               />
               {validationErrors.city && <p className="text-red-500 text-xs mt-1">{validationErrors.city}</p>}
             </div>
             <div className="relative group">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-green-600 transition-colors text-xl">🏛️</span> {/* Replaced Landmark with emoji */}
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-green-600 transition-colors text-xl">🏛️</span>
               <input
                 type="text"
                 name="state"
                 placeholder="State"
                 value={formData.state}
                 onChange={handleChange}
+                onBlur={() => validateField('state', formData.state)}
                 className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:border-green-500 transition-all duration-200 shadow-sm ${validationErrors.state ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-green-500'}`}
                 required
               />
               {validationErrors.state && <p className="text-red-500 text-xs mt-1">{validationErrors.state}</p>}
             </div>
             <div className="relative group">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-green-600 transition-colors text-xl">#️⃣</span> {/* Replaced Hash with emoji */}
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-green-600 transition-colors text-xl">#️⃣</span>
               <input
                 type="text"
                 name="pincode"
-                placeholder="Pincode"
+                placeholder="Pincode (6 digits)"
                 value={formData.pincode}
                 onChange={handleChange}
+                onBlur={() => validateField('pincode', formData.pincode)}
                 className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:border-green-500 transition-all duration-200 shadow-sm ${validationErrors.pincode ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-green-500'}`}
                 required
+                maxLength={6}
               />
               {validationErrors.pincode && <p className="text-red-500 text-xs mt-1">{validationErrors.pincode}</p>}
             </div>
@@ -436,6 +478,7 @@ const SellerSignup = () => {
                   placeholder="Number of Farmers (for FPO)"
                   value={formData.numberOfFarmers}
                   onChange={handleChange}
+                  onBlur={() => validateField('numberOfFarmers', formData.numberOfFarmers)}
                   className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:border-green-500 transition-all duration-200 shadow-sm ${validationErrors.numberOfFarmers ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-green-500'}`}
                   min="1"
                   required={formData.businessType === 'FPO'}
