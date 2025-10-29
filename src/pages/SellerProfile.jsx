@@ -1,4 +1,3 @@
-// src/pages/SellerProfile.jsx
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -28,8 +27,8 @@ const InputField = ({ label, name, value, type = 'text', readOnly = false, icon:
         onChange={onChange}
         disabled={readOnly}
         className={`w-full p-2 rounded-lg border-2 transition-all duration-200 text-sm
-                    ${readOnly ? 'bg-gray-100 border-gray-200 text-gray-700 cursor-default' : 'bg-white border-gray-300 focus:border-lime-500 focus:ring-1 focus:ring-lime-500 text-gray-900'}
-                    shadow-sm focus:shadow-md appearance-none pr-8 ${error ? 'border-red-500' : ''}`}
+          ${readOnly ? 'bg-gray-100 border-gray-200 text-gray-700 cursor-default' : 'bg-white border-gray-300 focus:border-lime-500 focus:ring-1 focus:ring-lime-500 text-gray-900'}
+          shadow-sm focus:shadow-md appearance-none pr-8 ${error ? 'border-red-500' : ''}`}
       >
         {options.map(option => (
           <option key={option.value} value={option.value}>{option.label}</option>
@@ -43,8 +42,8 @@ const InputField = ({ label, name, value, type = 'text', readOnly = false, icon:
         readOnly={readOnly}
         rows="3"
         className={`w-full p-2 rounded-lg border-2 transition-all duration-200 text-sm
-                    ${readOnly ? 'bg-gray-100 border-gray-200 text-gray-700 cursor-default' : 'bg-white border-gray-300 focus:border-lime-500 focus:ring-1 focus:ring-lime-500 text-gray-900'}
-                    shadow-sm focus:shadow-md ${error ? 'border-red-500' : ''}`}
+          ${readOnly ? 'bg-gray-100 border-gray-200 text-gray-700 cursor-default' : 'bg-white border-gray-300 focus:border-lime-500 focus:ring-1 focus:ring-lime-500 text-gray-900'}
+          shadow-sm focus:shadow-md ${error ? 'border-red-500' : ''}`}
       />
     ) : (
       <input
@@ -54,8 +53,8 @@ const InputField = ({ label, name, value, type = 'text', readOnly = false, icon:
         onChange={onChange}
         readOnly={readOnly}
         className={`w-full p-2 rounded-lg border-2 transition-all duration-200 text-sm
-                    ${readOnly ? 'bg-gray-100 border-gray-200 text-gray-700 cursor-default' : 'bg-white border-gray-300 focus:border-lime-500 focus:ring-1 focus:ring-lime-500 text-gray-900'}
-                    shadow-sm focus:shadow-md ${error ? 'border-red-500' : ''}`}
+          ${readOnly ? 'bg-gray-100 border-gray-200 text-gray-700 cursor-default' : 'bg-white border-gray-300 focus:border-lime-500 focus:ring-1 focus:ring-lime-500 text-gray-900'}
+          shadow-sm focus:shadow-md ${error ? 'border-red-500' : ''}`}
       />
     )}
     {error && <p className="text-red-500 text-xs mt-0.5">{error}</p>}
@@ -352,7 +351,7 @@ const SellerProfile = () => {
               return { ...prev, [name]: url };
             });
           } else {
-             throw new Error("Base64 content is empty or invalid.");
+              throw new Error("Base64 content is empty or invalid.");
           }
         } else {
           throw new Error("Data URL format mismatch.");
@@ -400,16 +399,12 @@ const SellerProfile = () => {
         // This is necessary because raw Base64 strings don't contain MIME type information.
         if (fieldName.includes('Photo')) {
           // For images, we can attempt to sniff popular types
-          const hexSignature = base64Content.substring(0, 8).toUpperCase(); // Get first few bytes for sniffing
-          if (hexSignature.startsWith('89504E47')) mimeType = 'image/png'; // PNG
-          else if (hexSignature.startsWith('FFD8FF')) mimeType = 'image/jpeg'; // JPEG
-          else if (hexSignature.startsWith('47494638')) mimeType = 'image/gif'; // GIF
-          else mimeType = 'image/jpeg'; // Fallback for unknown image types
+          // The Base64 preview logic needs the full Base64 string.
+          // In a real app, you might only do this for the first few bytes.
+          // For now, we'll make a simple guess.
+          mimeType = 'image/jpeg'; // Fallback for images
         } else if (fieldName.includes('Doc') || fieldName.includes('Certificate')) {
-          // For documents, default to PDF unless other types are expected
-          const hexSignature = base64Content.substring(0, 8).toUpperCase();
-          if (hexSignature.startsWith('25504446')) mimeType = 'application/pdf'; // PDF
-          else mimeType = 'application/pdf'; // Fallback for unknown document types
+          mimeType = 'application/pdf'; // Fallback for documents
         } else {
           console.error(`Cannot guess MIME type for raw Base64 string for ${fieldName}.`);
           return null; // Cannot create Blob if MIME type is unknown
@@ -438,7 +433,8 @@ const SellerProfile = () => {
   const fetchSellerProfile = useCallback(async () => {
     setLoading(true);
     setError('');
-    const authToken = localStorage.getItem('token');
+    // *** FIX 1: Use the correct token key 'token' (assuming this is correct) ***
+    const authToken = localStorage.getItem('token'); 
 
     if (!authToken) {
       showToastMessage('You are not logged in. Please log in to view your profile.', 'error');
@@ -504,8 +500,10 @@ const SellerProfile = () => {
       const errorMessage = err.response?.data?.message || err.message || 'Error fetching profile. Please try again.';
       showToastMessage(errorMessage, 'error');
       console.error("Fetch seller profile error:", err);
+      // Check for 401 or token errors to force re-login
       if (err.response?.status === 401 || errorMessage.includes('token') || errorMessage.includes('Authentication') || errorMessage.includes('Access denied')) {
-        localStorage.removeItem('sellerAuthToken');
+        // *** FIX 2: Clean up the correct token key on 401/Auth error ***
+        localStorage.removeItem('token'); 
         localStorage.removeItem('sellerData'); // Clear potentially bad sellerData from localStorage
         setTimeout(() => navigate('/seller-login'), 3000);
       }
@@ -552,7 +550,7 @@ const SellerProfile = () => {
        const freshDocUrls = {};
        const fileFields = ['userPhoto', 'shopPhoto', 'companyRegistrationDoc', 'gstCertificate', 'bankDetailsDoc', 'idProofDoc'];
        fileFields.forEach(field => {
-            freshDocUrls[field] = processBase64ToBlobUrl(sellerData[field], field);
+           freshDocUrls[field] = processBase64ToBlobUrl(sellerData[field], field);
        });
        setDocUrls(freshDocUrls);
     }
@@ -564,7 +562,8 @@ const SellerProfile = () => {
     setError('');
     setValidationErrors({});
 
-    const authToken = localStorage.getItem('sellerAuthToken');
+    // *** FIX 3: Use the correct token key 'token' for the save operation ***
+    const authToken = localStorage.getItem('token'); 
     if (!authToken) {
       showToastMessage('Authentication token missing. Please log in.', 'error');
       setLoading(false);
@@ -650,8 +649,10 @@ const SellerProfile = () => {
       const errorMessage = err.response?.data?.message || err.message || 'Error saving profile. Please try again.';
       showToastMessage(errorMessage, 'error');
       console.error("Save seller profile error:", err);
+      // Check for 401 or token errors to force re-login
       if (err.response?.status === 401 || errorMessage.includes('token') || errorMessage.includes('Authentication') || errorMessage.includes('Access denied')) {
-        localStorage.removeItem('sellerAuthToken');
+        // *** FIX 4: Clean up the correct token key on 401/Auth error ***
+        localStorage.removeItem('token'); 
         localStorage.removeItem('sellerData');
         setTimeout(() => navigate('/seller-login'), 3000);
       }

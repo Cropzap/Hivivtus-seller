@@ -409,7 +409,7 @@ const SellerNavbar = () => {
               <div className="w-full h-px bg-gray-200 my-4" />
 
               <SellerMobileNavItem to="/seller-support" onClick={() => setIsMobileMenuOpen(false)} icon={<LifeBuoy size={20} />} label="Tickets for Issues" />
-              <SellerMobileNavItem to="/seller-terms-and-conditions" onClick={() => setIsMobileMenuOpen(false)} icon={<FileText size={20} />} label="Terms & Conditions" />
+              <SellerMobileNavItem to="/terms-and-conditions" onClick={() => setIsMobileMenuOpen(false)} icon={<FileText size={20} />} label="Terms & Conditions" />
               <SellerMobileNavItem to="/seller-privacy-policy" onClick={() => setIsMobileMenuOpen(false)} icon={<Shield size={20} />} label="Privacy Policy" />
             </div>
           </motion.div>

@@ -11,6 +11,7 @@ import SellerProducts from './pages/SellerProducts';
 import SellerDashboard from './pages/SellerDashboard';
 import SellerOrders from './pages/SellerOrders';
 import SupportTicket from './pages/SupportTicket';
+import PrivacyTermsPage from './pages/PrivacyTermsPage';
 
 // You can keep a global CSS file if you have one
 // import './App.css';
@@ -36,6 +37,7 @@ function App() {
         <Route path="/seller-profile" element={<SellerProfile />} />
         <Route path="/seller-products" element={<SellerProducts />} />
          <Route path="/seller-support" element={<SupportTicket />} />
+         <Route path="/terms-and-conditions" element={<PrivacyTermsPage />} />
         {/* Redirect root to seller signup for now */}
         <Route path="/" element={<SellerSignup />} />
 
