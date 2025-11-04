@@ -17,7 +17,6 @@ import {
   LogOut,
   User, // For Profile
   UsersRound, // For Add Farmers (FPO specific)
-  PlusCircle, // For Add Farmers action
 } from "lucide-react";
 import SellerLogo from "../assets/Hivictus.png"; // Assuming you have a seller-specific logo
 import axios from 'axios'; // Import axios for API calls
@@ -27,21 +26,21 @@ const SellerMobileNavItem = ({ to, onClick, icon, label }) => {
   const location = useLocation();
   const isActive = to && location.pathname === to;
 
-  // Adjusted for white background: text-gray-800, hover:bg-lime-50
-  const itemClass = `flex items-center space-x-3 w-full p-3 rounded-lg transition-all duration-300
-    ${isActive ? "bg-lime-600 text-white shadow-md" : "text-gray-800 hover:bg-lime-50"}`;
+  // Refined styling for white menu: better hover effect and active state
+  const itemClass = `flex items-center space-x-4 w-full p-3 rounded-xl transition-all duration-300
+    ${isActive ? "bg-lime-600 text-white shadow-lg" : "text-gray-700 hover:bg-lime-50"}`;
 
   return (
-    <motion.div whileTap={{ scale: 0.98 }} className="w-full">
+    <motion.div whileTap={{ scale: 0.98 }} className="w-full mt-16">
       {to ? (
         <Link to={to} onClick={onClick} className={itemClass}>
-          {icon}
-          <span className="text-base font-medium">{label}</span>
+          {React.cloneElement(icon, { size: 22 })} {/* Increased icon size */}
+          <span className="text-lg font-medium">{label}</span>
         </Link>
       ) : (
         <button onClick={onClick} className={itemClass}>
-          {icon}
-          <span className="text-base font-medium">{label}</span>
+          {React.cloneElement(icon, { size: 22 })}
+          <span className="text-lg font-medium">{label}</span>
         </button>
       )}
     </motion.div>
@@ -53,17 +52,17 @@ const SellerFloatingBottomNavItem = ({ to, icon, label }) => {
   const location = useLocation();
   const isActive = location.pathname === to;
 
-  // Switched to a lime/green palette for the bottom nav
+  // Clean, minimal styling for the bottom nav
   return (
     <motion.div whileTap={{ scale: 0.95 }} className="relative flex flex-col items-center text-sm">
       <Link
         to={to}
         className={`flex flex-col items-center justify-center text-xs p-1
-          ${isActive ? "text-lime-400" : "text-gray-200 hover:text-lime-300"}
+          ${isActive ? "text-lime-300" : "text-gray-200 hover:text-lime-300"}
           transition-all duration-200`}
       >
-        {icon}
-        <span className="mt-0.5">{label}</span>
+        {React.cloneElement(icon, { size: 22 })}
+        <span className="mt-0.5 font-medium">{label}</span>
       </Link>
     </motion.div>
   );
@@ -82,6 +81,9 @@ const SellerNavbar = () => {
   const accountDropdownRef = useRef(null);
   const mobileNavRef = useRef(null);
   const mobileMenuButtonRef = useRef(null);
+  
+  // Set the reduced mobile navbar height
+  const MOBILE_NAV_HEIGHT_PX = 56; // h-14 is 3.5rem (56px)
 
   useEffect(() => {
     setIsClient(true);
@@ -89,7 +91,6 @@ const SellerNavbar = () => {
 
   // Function to fetch seller profile from backend (omitted implementation details for brevity, assumed functional)
   const fetchSellerProfile = useCallback(async (token) => {
-    // ... (Your existing fetchSellerProfile logic)
     try {
       const res = await axios.get('/api/sellerprofile', {
         headers: { 'x-auth-token': token },
@@ -110,13 +111,12 @@ const SellerNavbar = () => {
     }
   }, [navigate]);
 
-  // Check seller login status and load seller data (omitted implementation details for brevity, assumed functional)
+  // Check seller login status and load seller data
   useEffect(() => {
     const token = localStorage.getItem('token');
     const storedSellerData = localStorage.getItem('sellerData');
 
     if (token) {
-      // Logic to check token and stored data, then call fetchSellerProfile if needed
       if (storedSellerData) {
         try {
           if (storedSellerData === "undefined") {
@@ -145,14 +145,14 @@ const SellerNavbar = () => {
 
 
   const handleLogout = () => {
-    localStorage.removeItem('token'); // Use the correct key, typically 'token' or 'x-auth-token'
+    localStorage.removeItem('token');
     localStorage.removeItem('sellerData');
     setIsSellerLoggedIn(false);
     setSellerData(null);
     navigate('/seller-login');
   };
 
-  // Close dropdowns/menus on outside click (retained existing logic)
+  // Close dropdowns/menus on outside click
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (accountDropdownRef.current && !accountDropdownRef.current.contains(event.target)) {
@@ -205,12 +205,12 @@ const SellerNavbar = () => {
 
   const mobileMenuCommonItems = (
     <>
-      <SellerMobileNavItem to="/seller-dashboard" onClick={() => setIsMobileMenuOpen(false)} icon={<Home size={20} />} label="Home" />
+      <SellerMobileNavItem to="/seller-dashboard" onClick={() => setIsMobileMenuOpen(false)} icon={<Home />} label="Home" />
       {isSellerLoggedIn && sellerData?.businessType === 'FPO' && (
-        <SellerMobileNavItem to="/seller-add-farmers" onClick={() => setIsMobileMenuOpen(false)} icon={<UsersRound size={20} />} label="Add Farmers" />
+        <SellerMobileNavItem to="/seller-add-farmers" onClick={() => setIsMobileMenuOpen(false)} icon={<UsersRound />} label="Add Farmers" />
       )}
-      <SellerMobileNavItem to="/seller-products" onClick={() => setIsMobileMenuOpen(false)} icon={<Tag size={20} />} label="Sell Products" />
-      <SellerMobileNavItem to="/seller-orders" onClick={() => setIsMobileMenuOpen(false)} icon={<ListOrdered size={20} />} label="Orders" />
+      <SellerMobileNavItem to="/seller-products" onClick={() => setIsMobileMenuOpen(false)} icon={<Tag />} label="Sell Products" />
+      <SellerMobileNavItem to="/seller-orders" onClick={() => setIsMobileMenuOpen(false)} icon={<ListOrdered />} label="Orders" />
     </>
   );
 
@@ -218,15 +218,15 @@ const SellerNavbar = () => {
     <div className="w-full">
       {/* 🔹 Desktop Navbar */}
       <div className="hidden md:flex fixed top-0 left-0 w-full h-20 items-center justify-between px-8 z-50 
-                      bg-white shadow-lg border-b border-gray-100"> {/* Changed to WHITE background */}
+                      bg-white shadow-lg border-b border-gray-100">
         
         {/* Logo on the left - BIGGER SIZE */}
         <Link to="/seller-dashboard" className="flex items-center justify-start h-full">
           <motion.img
             src={SellerLogo}
             alt="Seller Portal Logo"
-            // Increased height to h-20 for a bigger logo
-            className="object-contain h-20 w-auto" 
+            // Logo size adjusted slightly for desktop consistency
+            className="object-contain h-16 w-auto" 
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.5 }}
@@ -249,8 +249,8 @@ const SellerNavbar = () => {
                 className={`flex items-center space-x-1 py-2 px-4 transition-all duration-300 ease-in-out text-sm
                   ${
                     isSellerLoggedIn || location.pathname === "/seller-login" || location.pathname === "/seller-signup"
-                      ? "text-lime-600 font-semibold" // Active/Logged-in state color
-                      : "text-gray-700 hover:text-lime-600" // Default state color
+                      ? "text-lime-600 font-semibold"
+                      : "text-gray-700 hover:text-lime-600"
                   }`}
               >
                 <span>My Account</span>
@@ -345,30 +345,29 @@ const SellerNavbar = () => {
         initial={{ y: -50, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.5 }}
-        // Set to WHITE background, fixed height h-20 for better look
-        className="md:hidden fixed top-0 left-0 w-full bg-white shadow-lg p-2 flex justify-between items-center z-50 h-20" 
+        // 🚨 REDUCED SIZE: h-14 (56px) 
+        className={`md:hidden fixed top-0 left-0 w-full bg-white shadow-lg p-2 flex justify-between items-center z-50 h-[${MOBILE_NAV_HEIGHT_PX}px]`}
       >
         <Link to="/seller-dashboard" className="flex flex-row items-center">
           <img
             src={SellerLogo}
             alt="Seller Portal Logo"
-            // Increased size for mobile logo
-            className="object-contain h-16 w-auto" 
+            // Logo size adjusted to fit h-14 bar
+            className="object-contain h-10 w-auto" 
           />
         </Link>
         <button
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
           ref={mobileMenuButtonRef}
-          // Changed color to gray for white background
           className="text-gray-700 hover:text-lime-600 transition-colors duration-200 pr-2" 
         >
-          {isMobileMenuOpen ? <X size={30} /> : <Menu size={30} />}
+          {isMobileMenuOpen ? <X size={28} /> : <Menu size={28} />} {/* Slightly reduced icon size */}
         </button>
       </motion.div>
       
       {/* MOBILE CONTENT PADDING HACK */}
-      <div className="block md:hidden h-20" /> 
-      {/* This invisible div pushes the main content down by the height of the fixed top nav */}
+      {/* Adjusted padding height to match new mobile bar size */}
+      <div className={`block md:hidden h-[${MOBILE_NAV_HEIGHT_PX}px]`} /> 
 
 
       {/* 🔹 Mobile Full-Screen Menu (when toggled) */}
@@ -382,35 +381,35 @@ const SellerNavbar = () => {
             className="md:hidden fixed top-0 right-0 h-full w-full bg-white z-40 p-6 overflow-y-auto shadow-lg"
             ref={mobileNavRef}
           >
-            {/* Increased padding-top to account for fixed top bar */}
-            <div className="flex flex-col items-start space-y-4 pb-20 pt-24"> 
+            {/* Adjusted padding-top to account for the reduced fixed top bar */}
+            <div className={`flex flex-col items-start space-y-3 pb-20 pt-[${MOBILE_NAV_HEIGHT_PX + 20}px]`}> 
               {mobileMenuCommonItems}
 
               <div className="w-full h-px bg-gray-200 my-4" />
 
               {isSellerLoggedIn ? (
                 <>
-                  <SellerMobileNavItem to="/seller-profile" onClick={() => setIsMobileMenuOpen(false)} icon={<User size={20} />} label="My Profile" />
+                  <SellerMobileNavItem to="/seller-profile" onClick={() => setIsMobileMenuOpen(false)} icon={<User />} label="My Profile" />
                   <button
                     onClick={() => { handleLogout(); setIsMobileMenuOpen(false); }}
-                    className="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 rounded-lg shadow-md transition-all duration-300 flex items-center justify-center space-x-2 mt-4"
+                    className="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 rounded-xl shadow-md transition-all duration-300 flex items-center justify-center space-x-3 mt-4"
                   >
-                    <LogOut size={20} />
-                    <span>Logout</span>
+                    <LogOut size={22} />
+                    <span className="text-lg">Logout</span>
                   </button>
                 </>
               ) : (
                 <>
-                  <SellerMobileNavItem to="/seller-login" onClick={() => setIsMobileMenuOpen(false)} icon={<LogIn size={20} />} label="Login" />
-                  <SellerMobileNavItem to="/seller-signup" onClick={() => setIsMobileMenuOpen(false)} icon={<UserPlus size={20} />} label="Register" />
+                  <SellerMobileNavItem to="/seller-login" onClick={() => setIsMobileMenuOpen(false)} icon={<LogIn />} label="Login" />
+                  <SellerMobileNavItem to="/seller-signup" onClick={() => setIsMobileMenuOpen(false)} icon={<UserPlus />} label="Register" />
                 </>
               )}
 
               <div className="w-full h-px bg-gray-200 my-4" />
 
-              <SellerMobileNavItem to="/seller-support" onClick={() => setIsMobileMenuOpen(false)} icon={<LifeBuoy size={20} />} label="Tickets for Issues" />
-              <SellerMobileNavItem to="/terms-and-conditions" onClick={() => setIsMobileMenuOpen(false)} icon={<FileText size={20} />} label="Terms & Conditions" />
-              <SellerMobileNavItem to="/seller-privacy-policy" onClick={() => setIsMobileMenuOpen(false)} icon={<Shield size={20} />} label="Privacy Policy" />
+              <SellerMobileNavItem to="/seller-support" onClick={() => setIsMobileMenuOpen(false)} icon={<LifeBuoy />} label="Tickets for Issues" />
+              <SellerMobileNavItem to="/terms-and-conditions" onClick={() => setIsMobileMenuOpen(false)} icon={<FileText />} label="Terms & Conditions" />
+              <SellerMobileNavItem to="/seller-privacy-policy" onClick={() => setIsMobileMenuOpen(false)} icon={<Shield />} label="Privacy Policy" />
             </div>
           </motion.div>
         )}
@@ -423,15 +422,15 @@ const SellerNavbar = () => {
         transition={{ type: "spring", stiffness: 120, damping: 15, delay: 0.5 }}
         // Set to dark green background to clearly separate it from the main content
         className="md:hidden fixed bottom-0 left-0 w-full bg-green-800 transition-all duration-500 ease-out
-                   border-t border-green-700 shadow-[0_-4px_15px_rgba(0,0,0,0.1)] px-4 py-2 flex justify-around items-center z-50"
+                   border-t border-green-700 shadow-[0_-4px_15px_rgba(0,0,0,0.2)] px-4 py-2 flex justify-around items-center z-50"
       >
-        <SellerFloatingBottomNavItem to="/seller-dashboard" icon={<Home size={22} />} label="Home" />
-        <SellerFloatingBottomNavItem to="/seller-products" icon={<Tag size={22} />} label="Products" />
-        <SellerFloatingBottomNavItem to="/seller-orders" icon={<ListOrdered size={22} />} label="Orders" />
+        <SellerFloatingBottomNavItem to="/seller-dashboard" icon={<Home />} label="Home" />
+        <SellerFloatingBottomNavItem to="/seller-products" icon={<Tag />} label="Products" />
+        <SellerFloatingBottomNavItem to="/seller-orders" icon={<ListOrdered />} label="Orders" />
         {isSellerLoggedIn ? (
-          <SellerFloatingBottomNavItem to="/seller-profile" icon={<User size={22} />} label="Profile" />
+          <SellerFloatingBottomNavItem to="/seller-profile" icon={<User />} label="Profile" />
         ) : (
-          <SellerFloatingBottomNavItem to="/seller-login" icon={<LogIn size={22} />} label="Login" />
+          <SellerFloatingBottomNavItem to="/seller-login" icon={<LogIn />} label="Login" />
         )}
       </motion.nav>
     </div>

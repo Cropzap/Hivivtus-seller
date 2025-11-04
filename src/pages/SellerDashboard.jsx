@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FaShoppingCart, FaDollarSign, FaHistory, FaUserCircle, FaEdit, FaSpinner, FaFileAlt, FaQuestionCircle, FaTicketAlt, FaSignOutAlt, FaEye, FaBuilding, FaHome, FaBox, FaWrench, FaTags, FaArrowRight, FaPlus, FaChevronRight, FaRegUserCircle, FaStore, FaChartLine, FaArrowLeft, FaBars,FaCheck } from 'react-icons/fa';
+import { FaShoppingCart, FaDollarSign, FaHistory, FaUserCircle, FaEdit, FaSpinner, FaFileAlt, FaQuestionCircle, FaTicketAlt, FaSignOutAlt, FaEye, FaBuilding, FaHome, FaBox, FaWrench, FaTags, FaArrowRight, FaPlus, FaChevronRight, FaRegUserCircle, FaStore, FaChartLine, FaArrowLeft, FaBars,FaCheck,FaExclamationTriangle } from 'react-icons/fa';
 import { Link, useNavigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import axios from 'axios';
@@ -319,7 +319,7 @@ const SellerDashboard = () => {
 
   const handleLogout = () => {
     localStorage.removeItem('token');
-    navigate('/login');
+    navigate('/seller-login');
   };
   
   // Custom navigation handler for mobile back button
@@ -514,7 +514,7 @@ const SellerDashboard = () => {
   
   // New handler for Add Product - uses navigate for routing
   const handleAddNewProduct = () => {
-    navigate('/add-product');
+    navigate('/seller-products');
   }
 
   // New handler for New Ticket - uses navigate for routing
@@ -651,13 +651,13 @@ const SellerDashboard = () => {
       <div className="bg-white rounded-3xl shadow-lg p-5 border border-gray-100">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-bold text-gray-900 hidden lg:block">All Products ({products.length})</h2>
-          <motion.button 
+          {/* <motion.button 
             onClick={handleAddNewProduct} 
             className="text-sm font-semibold text-white bg-emerald-600 px-3 py-1.5 rounded-full hover:bg-emerald-700 transition-colors flex items-center active:scale-95 shadow-md"
             whileTap={{ scale: 0.95 }}
           >
             <FaPlus className='mr-1' /> Add New
-          </motion.button>
+          </motion.button> */}
         </div>
         <div className="space-y-3">
           {products.length > 0 ? (
@@ -819,7 +819,7 @@ const SellerDashboard = () => {
           <p className="mt-2 text-xl font-bold">Error Loading Data</p>
           <p className="text-center mt-2">{error}</p>
           <motion.button
-            onClick={() => navigate('/login')}
+            onClick={() => navigate('/seller-login')}
             className="mt-6 bg-red-500 text-white px-4 py-2 rounded-full hover:bg-red-600 transition-colors active:scale-95"
             whileTap={{ scale: 0.95 }}
           >

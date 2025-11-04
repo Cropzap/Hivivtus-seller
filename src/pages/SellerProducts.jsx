@@ -1,12 +1,16 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   PlusCircle, Edit, Trash2, X, Loader, Image as ImageIcon, Tag, Text, DollarSign, Package, Scale,
-  List, Layers, Info, Check, AlertCircle, ShoppingBag, Box, Grid, Percent, Ruler, Zap
-} from 'lucide-react';
+  List, Layers, Info, Check, AlertCircle, ShoppingBag, Box, Grid, Ruler, Zap, Landmark
+} from 'lucide-react'; // Removed Percent icon as Platform Fee is hidden
 import { useNavigate } from 'react-router-dom';
 
 const API_URL = import.meta.env.VITE_API_URL;
+
+// --- CONSTANT FOR CALCULATION ---
+const SELLER_SHARE_PERCENTAGE = 0.75;
+const PLATFORM_FEE_PERCENTAGE = 0.25; // KEPT for calculation logic
 
 // Helper for Input Fields - Optimized for smaller size and cleaner look
 const InputField = ({ label, name, value, type = 'text', icon: Icon, options, onChange, error, placeholder, disabled = false }) => (
@@ -59,6 +63,20 @@ const InputField = ({ label, name, value, type = 'text', icon: Icon, options, on
   </div>
 );
 
+// --- New Component for Read-Only Calculated Field ---
+const CalculatedField = ({ label, value, icon: Icon, color = 'text-blue-600' }) => (
+    <div className="mb-3">
+      <label className="block text-gray-700 text-xs font-medium mb-1 flex items-center">
+        {Icon && <Icon className={`mr-1 ${color}`} size={14} />}
+        {label}
+      </label>
+      <div className="w-full p-2 rounded-lg border-2 transition-all duration-200 text-sm bg-emerald-50 border-emerald-300 text-emerald-800 font-semibold shadow-inner">
+        {value}
+      </div>
+    </div>
+);
+
+
 // Initial form data structure
 const initialFormData = {
   name: '',
@@ -71,6 +89,7 @@ const initialFormData = {
   category: '',
   subCategory: '',
   type: 'Conventional',
+  // Net Receivable and Platform Earnings are calculated, not stored in formData
 };
 
 const SellerProducts = () => {
@@ -78,7 +97,7 @@ const SellerProducts = () => {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+  const [isConfirmModalOpen, setIsConfirmModal] = useState(false);
   const [productToDelete, setProductToDelete] = useState(null);
   const [currentProduct, setCurrentProduct] = useState(null);
   const [formData, setFormData] = useState(initialFormData);
@@ -101,13 +120,32 @@ const SellerProducts = () => {
   
   const openConfirmModal = (productId) => {
     setProductToDelete(productId);
-    setIsConfirmModalOpen(true);
+    setIsConfirmModal(true);
   };
 
   const closeConfirmModal = () => {
-    setIsConfirmModalOpen(false);
+    setIsConfirmModal(false);
     setProductToDelete(null);
   };
+
+  // --- CALCULATION LOGIC ---
+  const calculateEarnings = (price) => {
+    const p = parseFloat(price);
+    if (isNaN(p) || p <= 0) {
+      return { netReceivable: 0, platformEarnings: 0 };
+    }
+    const netReceivable = (p * SELLER_SHARE_PERCENTAGE).toFixed(2);
+    // Platform earnings calculated but not displayed
+    const platformEarnings = (p * PLATFORM_FEE_PERCENTAGE).toFixed(2); 
+    return { netReceivable, platformEarnings };
+  };
+
+  // Use useMemo to prevent unnecessary recalculations of the earnings preview
+  // Platform earnings is calculated here but will not be explicitly shown in the modal
+  const { netReceivable: liveNetReceivable } = useMemo(() => 
+    calculateEarnings(formData.price)
+  , [formData.price]);
+
 
   // --- Validation Logic ---
   const validateField = useCallback((name, value, allFormData) => {
@@ -120,13 +158,15 @@ const SellerProducts = () => {
         if (!value.trim()) error = 'Description is required.';
         break;
       case 'price':
-        if (value === '' || isNaN(value) || parseFloat(value) <= 0) error = 'Price must be a positive number.';
+        const p = parseFloat(value);
+        if (value === '' || isNaN(p) || p <= 0) error = 'Price must be a positive number.';
         break;
       case 'unit':
         if (!value.trim()) error = 'Unit is required (e.g., kg, piece).';
         break;
       case 'quantity':
-        if (value === '' || isNaN(value) || parseInt(value) < 0) error = 'Quantity must be a non-negative integer.';
+        const q = parseInt(value);
+        if (value === '' || isNaN(q) || q < 0) error = 'Quantity must be a non-negative integer.';
         break;
       case 'dimensions':
         if (!value.trim()) error = 'Dimensions are required (LxWxH format).';
@@ -166,8 +206,14 @@ const SellerProducts = () => {
   const handleChange = useCallback((e) => {
     const { name, value } = e.target;
     setFormData(prev => {
-      const newFormData = { ...prev, [name]: value };
-      const error = validateField(name, value, newFormData);
+      let finalValue = value;
+      // Convert number inputs to string to handle empty state correctly
+      if (e.target.type === 'number') {
+        finalValue = value === '' ? '' : String(parseFloat(value));
+      }
+
+      const newFormData = { ...prev, [name]: finalValue };
+      const error = validateField(name, finalValue, newFormData);
       setValidationErrors(prevErrors => ({ ...prevErrors, [name]: error }));
       return newFormData;
     });
@@ -209,7 +255,7 @@ const SellerProducts = () => {
         if (readersPending === 0) {
             if (fileError) {
                 showToast(fileError, 'error');
-                setValidationErrors(prev => ({ ...prev, imageUrls: fileError }));
+                setValidationErrors(prev => ({ ...prevErrors, imageUrls: fileError }));
             } else {
                 setFormData(prev => {
                     const updatedUrls = [...prev.imageUrls, ...newImageUrls];
@@ -240,7 +286,7 @@ const SellerProducts = () => {
     });
   };
 
-  // --- Fetching and Submission (Same as before) ---
+  // --- Fetching and Submission ---
   const fetchCategories = useCallback(async () => {
     try {
       const response = await fetch(`${API_URL}categories`);
@@ -335,9 +381,10 @@ const SellerProducts = () => {
       setFormData({
         name: product.name,
         description: product.description,
-        price: product.price,
+        // Ensure price is treated as a number/string for display
+        price: product.price ? String(product.price) : '', 
         unit: product.unit,
-        quantity: product.quantity,
+        quantity: product.quantity ? String(product.quantity) : '',
         dimensions: product.dimensions || '', 
         imageUrls: product.imageUrls || [], 
         category: product.category._id,
@@ -368,6 +415,16 @@ const SellerProducts = () => {
       setFormLoading(false);
       return;
     }
+    
+    // Prepare data for API: ensure numbers are numbers and the price is included
+    const dataToSend = {
+        ...formData,
+        price: parseFloat(formData.price),
+        quantity: parseInt(formData.quantity),
+        // netReceivable and platformEarnings are calculated by the backend pre-save hook
+        // The calculation logic in the frontend is only for UI preview of Net Receivable, 
+        // the backend will perform the actual calculation and storage for both netReceivable and platformEarnings.
+    };
 
     const authToken = localStorage.getItem('token');
     if (!authToken) {
@@ -388,7 +445,7 @@ const SellerProducts = () => {
           'Content-Type': 'application/json',
           'x-auth-token': authToken,
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(dataToSend),
       });
 
       const data = await response.json();
@@ -567,14 +624,21 @@ const SellerProducts = () => {
                 <div className="p-3 flex flex-col flex-grow">
                   <h3 className="text-sm font-bold text-emerald-800 mb-1 line-clamp-2">{product.name}</h3>
                   
-                  <div className="flex items-center text-gray-800 font-semibold text-base mb-2 mt-auto">
+                  {/* Selling Price */}
+                  <div className="flex items-center text-gray-800 font-semibold text-sm mb-1 mt-auto">
                     <DollarSign size={14} className="mr-1 text-emerald-700" />
-                    ₹{product.price.toFixed(2)} <span className="text-xs text-gray-500 ml-1">/ {product.unit}</span>
+                    Price: ₹{product.price.toFixed(2)}
                   </div>
                   
+                  {/* Net Receivable (Stored in DB and fetched) */}
+                  <div className="flex items-center text-green-700 font-bold text-sm mb-3">
+                    <Landmark size={14} className="mr-1 text-green-700" />
+                    You Earn: ₹{(product.netReceivable || product.price * SELLER_SHARE_PERCENTAGE).toFixed(2)}
+                  </div>
+
                   <div className="flex items-center text-gray-600 text-xs mb-3">
                     <Box size={12} className="mr-1 text-emerald-600" />
-                    <span className="font-medium">{product.quantity} in stock</span>
+                    <span className="font-medium">{product.quantity} in stock / {product.unit}</span>
                   </div>
                   
                   <div className="flex space-x-2 justify-end pt-2 border-t border-gray-100">
@@ -651,9 +715,12 @@ const SellerProducts = () => {
                   placeholder="Detailed description of the product..."
                   error={validationErrors.description}
                 />
-                <div className="grid grid-cols-2 gap-x-3">
+                
+                {/* --- PRICE & LIVE CALCULATION FIELDS --- */}
+                {/* MODIFIED: Changed grid to 2 columns and removed the Platform Fee CalculatedField */}
+                <div className="grid grid-cols-2 gap-x-3"> 
                   <InputField
-                    label="Price (₹)"
+                    label="Selling Price (₹)"
                     name="price"
                     value={formData.price}
                     onChange={handleChange}
@@ -662,6 +729,17 @@ const SellerProducts = () => {
                     placeholder="250.00"
                     error={validationErrors.price}
                   />
+                  <CalculatedField
+                    label="Net Receivable (75% Share)"
+                    value={`₹${liveNetReceivable}`}
+                    icon={Landmark}
+                    color="text-green-600"
+                  />
+                  {/* REMOVED: CalculatedField for Platform Fee is now hidden */}
+                </div>
+                {/* ------------------------------------- */}
+                
+                <div className="grid grid-cols-2 gap-x-3">
                   <InputField
                     label="Unit"
                     name="unit"
@@ -671,9 +749,7 @@ const SellerProducts = () => {
                     placeholder="Kg, Liter, Piece"
                     error={validationErrors.unit}
                   />
-                </div>
-                <div className="grid grid-cols-2 gap-x-3">
-                    <InputField
+                  <InputField
                     label="Quantity in Stock"
                     name="quantity"
                     value={formData.quantity}
@@ -682,27 +758,27 @@ const SellerProducts = () => {
                     icon={Package}
                     placeholder="100"
                     error={validationErrors.quantity}
-                    />
-                    <InputField
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-x-3">
+                  <InputField
+                    label="Package Dimensions (LxWxH)"
+                    name="dimensions"
+                    value={formData.dimensions}
+                    onChange={handleChange}
+                    icon={Ruler}
+                    placeholder="e.g., 10x10x5 cm"
+                    error={validationErrors.dimensions}
+                  />
+                  <InputField
                     label="Product Type"
                     name="type"
                     value={formData.type}
                     onChange={handleChange}
                     icon={Info}
                     placeholder="e.g., Organic, Natural"
-                    />
+                  />
                 </div>
-                
-                {/* NEW FIELD: Dimensions */}
-                <InputField
-                  label="Package Dimensions (LxWxH)"
-                  name="dimensions"
-                  value={formData.dimensions}
-                  onChange={handleChange}
-                  icon={Ruler}
-                  placeholder="e.g., 10x10x5 cm"
-                  error={validationErrors.dimensions}
-                />
 
                 <div className="grid grid-cols-2 gap-x-3">
                     <InputField
@@ -745,50 +821,49 @@ const SellerProducts = () => {
                     disabled={formData.imageUrls.length >= MAX_IMAGES || formLoading}
                     className="w-full text-sm text-gray-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed"
                   />
+
                   {validationErrors.imageUrls && <p className="text-red-500 text-xs mt-1">{validationErrors.imageUrls}</p>}
-                  
-                  {/* Image Previews */}
-                  <div className="mt-3 grid grid-cols-4 gap-2">
+
+                  {/* Image Preview Grid */}
+                  <div className="mt-4 grid grid-cols-4 gap-2">
                     {formData.imageUrls.map((url, index) => (
-                      <div key={index} className="relative group aspect-square">
+                      <div key={index} className="relative aspect-square rounded-lg overflow-hidden shadow-md">
                         <img 
                           src={url} 
-                          alt={`Product Preview ${index + 1}`} 
-                          className="w-full h-full object-cover rounded-lg border border-gray-300" 
+                          alt={`Product Image ${index + 1}`} 
+                          className="w-full h-full object-cover"
                         />
                         <motion.button
                           type="button"
                           onClick={() => removeImage(index)}
                           whileHover={{ scale: 1.1 }}
                           whileTap={{ scale: 0.9 }}
-                          className="absolute top-0 right-0 transform translate-x-1/3 -translate-y-1/3 bg-red-600 text-white rounded-full p-0.5 shadow-md hover:bg-red-700 transition-colors"
+                          className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-1 shadow-lg hover:bg-red-700 transition-colors"
                           aria-label={`Remove image ${index + 1}`}
+                          disabled={formLoading}
                         >
                           <X size={12} />
                         </motion.button>
                       </div>
                     ))}
                   </div>
-                  <p className="text-xs text-gray-500 mt-2">Max file size: {MAX_IMAGE_SIZE_MB}MB each.</p>
                 </div>
-                {/* END UPDATED IMAGE UPLOAD SECTION */}
-
 
                 <motion.button
                   type="submit"
-                  disabled={formLoading}
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  className={`w-full py-2.5 px-4 rounded-lg text-white font-semibold text-base shadow-lg transition-all duration-300 ease-in-out flex items-center justify-center space-x-2 mt-4
-                              ${formLoading ? 'bg-gray-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700 active:scale-98'}`}
+                  disabled={formLoading}
+                  className={`w-full flex justify-center items-center py-2.5 rounded-full text-white font-semibold shadow-lg transition-all duration-200 mt-6
+                    ${formLoading ? 'bg-gray-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700'}`}
                 >
                   {formLoading ? (
                     <>
-                      <Loader size={20} className="animate-spin" />
-                      <span>Saving...</span>
+                      <Loader className="mr-2 animate-spin" size={20} />
+                      {currentProduct ? 'Updating...' : 'Adding...'}
                     </>
                   ) : (
-                    <span>{currentProduct ? 'Update Product' : 'Add Product'}</span>
+                    <>{currentProduct ? 'Update Product' : 'Add Product'}</>
                   )}
                 </motion.button>
               </form>
@@ -796,8 +871,8 @@ const SellerProducts = () => {
           </motion.div>
         )}
       </AnimatePresence>
-      
-      {/* Confirmation Modal (Delete) */}
+
+      {/* Confirmation Modal for Delete */}
       <AnimatePresence>
         {isConfirmModalOpen && (
           <motion.div
@@ -811,20 +886,18 @@ const SellerProducts = () => {
               initial="hidden"
               animate="visible"
               exit="exit"
-              className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm relative"
+              className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm relative border border-red-300"
             >
-              <h2 className="text-xl font-bold text-red-700 mb-4 flex items-center">
-                <AlertCircle className="mr-2" size={24} /> Confirm Deletion
-              </h2>
-              <p className="text-gray-700 mb-6">
-                Are you sure you want to delete this product? This action cannot be undone.
-              </p>
+              <h3 className="text-xl font-bold text-red-700 mb-4 flex items-center">
+                <AlertCircle className="mr-2" size={20} /> Confirm Deletion
+              </h3>
+              <p className="text-gray-600 mb-6">Are you sure you want to delete this product? This action cannot be undone.</p>
               <div className="flex justify-end space-x-3">
                 <motion.button
                   onClick={closeConfirmModal}
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
-                  className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
+                  className="px-4 py-2 bg-gray-200 text-gray-800 rounded-full font-semibold transition-all duration-200 hover:bg-gray-300 text-sm"
                 >
                   Cancel
                 </motion.button>
@@ -832,8 +905,11 @@ const SellerProducts = () => {
                   onClick={handleDelete}
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition-colors"
+                  disabled={loading}
+                  className={`px-4 py-2 text-white rounded-full font-semibold transition-all duration-200 text-sm flex items-center
+                    ${loading ? 'bg-red-400 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700'}`}
                 >
+                  {loading && <Loader className="mr-2 animate-spin" size={16} />}
                   Delete
                 </motion.button>
               </div>
@@ -850,10 +926,12 @@ const SellerProducts = () => {
             initial="hidden"
             animate="visible"
             exit="exit"
-            className={`fixed bottom-4 right-4 p-4 rounded-xl shadow-lg text-white max-w-xs w-full flex items-center space-x-2 z-50 ${toastType === 'success' ? 'bg-emerald-500' : 'bg-red-500'}`}
+            className={`fixed bottom-4 right-4 p-4 rounded-xl shadow-2xl text-white font-semibold max-w-sm z-50 flex items-center ${
+              toastType === 'success' ? 'bg-green-500' : 'bg-red-500'
+            }`}
           >
-            {toastType === 'success' ? <Check size={20} /> : <AlertCircle size={20} />}
-            <p className="text-sm font-medium">{toastMessage}</p>
+            {toastType === 'success' ? <Check size={20} className="mr-2" /> : <AlertCircle size={20} className="mr-2" />}
+            {toastMessage}
           </motion.div>
         )}
       </AnimatePresence>
